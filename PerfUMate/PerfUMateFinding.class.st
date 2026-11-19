@@ -147,7 +147,10 @@ PerfUMateFinding >> summary [
 					  nextPutAll: ' us)' ]
 			  ifFalse: [
 				  stream print: signature.
-				  signature messageText ifNotEmpty: [ :text |
+				  "A broken invariant's label is already in its signature"
+				  (signature messageText notEmpty and: [ (signature location includesSubstring: signature messageText) not ]) ifTrue: [
+					  | text |
+					  text := signature messageText.
 					  stream
 						  nextPutAll: ': ';
 						  nextPutAll: text ] ].

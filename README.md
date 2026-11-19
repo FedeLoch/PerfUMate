@@ -252,6 +252,7 @@ so pull requests can run short campaigns and nightly jobs long ones. See
 
 ## More
 
+- [Campaigns](campaigns/README.md): real campaigns on Pharo's own libraries (STON, Fuel, copying, equality, printing, hashed collections), the Termo hunt redone with PerfUMate.
 - [Examples](https://github.com/FedeLoch/PerfUMate/wiki/Examples): step by step examples, from the minimal campaign to custom guides.
 - [Technical architecture](https://github.com/FedeLoch/PerfUMate/wiki/PerfUMate-Technical-Architecture): how each part works and can be configured (corpus, grammar mutators, MOpt, feedback, weighted grammars, instrumentation, metrics).
 - [Design](https://github.com/FedeLoch/PerfUMate/wiki/PerfUMate-design): design notes and proposed changes to Ume, Mate and Shin.

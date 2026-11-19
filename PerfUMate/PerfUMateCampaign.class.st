@@ -242,7 +242,7 @@ PerfUMateCampaign >> runUmeFor: aDuration [
 		          property: [ :receiver :arguments :result | true ];
 		          method: PerfUMateBenchmark >> #runOn:;
 		          yourself.
-	runner := UmeRunner test: schema for: (aDuration max: 1 second).
+	runner := PerfUMateRunner test: schema for: (aDuration max: 1 second).
 	self guide: runner.
 	runner methodsToInstrument: self methodsToInstrument.
 	^ runner run

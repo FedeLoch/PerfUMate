@@ -17,7 +17,9 @@ BaselineOfPerfUMate >> baseline: spec [
 
 		spec package: 'PerfUMate' with: [ spec requires: #( 'Ume' 'Mate' 'Shin' ) ].
 		spec package: 'PerfUMate-Tests' with: [ spec requires: #( 'PerfUMate' ) ].
+		spec package: 'PerfUMate-Campaigns' with: [ spec requires: #( 'PerfUMate' ) ].
 
 		spec group: 'core' with: #( 'PerfUMate' ).
+		spec group: 'campaigns' with: #( 'PerfUMate-Campaigns' ).
 		spec group: 'default' with: #( 'PerfUMate' 'PerfUMate-Tests' ) ]
 ]

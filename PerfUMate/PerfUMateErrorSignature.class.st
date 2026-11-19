@@ -109,5 +109,7 @@ PerfUMateErrorSignature >> setError: anError [
 		            ifNotNil: [ :context | (self methodOf: context) printString ].
 	messageText := [ anError messageText asString ]
 		               on: Error
-		               do: [ :e | e return: '' ]
+		               do: [ :e | e return: '' ].
+	"A broken invariant is identified by what broke, not only by where"
+	(anError isKindOf: PerfUMateBrokenInvariant) ifTrue: [ location := location , ' (' , messageText , ')' ]
 ]

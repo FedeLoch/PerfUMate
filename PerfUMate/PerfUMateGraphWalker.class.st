@@ -12,6 +12,7 @@ Class {
 		'root',
 		'slots',
 		'seen',
+		'visited',
 		'maxObjects'
 	],
 	#category : 'PerfUMate-Graphs',
@@ -37,6 +38,7 @@ PerfUMateGraphWalker >> enqueue: anObject into: aQueue [
 	(self isLeaf: anObject) ifTrue: [ ^ self ].
 	(seen includes: anObject) ifTrue: [ ^ self ].
 	seen add: anObject.
+	visited add: anObject.
 	aQueue add: anObject
 ]
 
@@ -64,6 +66,14 @@ PerfUMateGraphWalker >> isResizable: anObject [
 PerfUMateGraphWalker >> numberSlots [
 
 	^ self slots select: [ :slot | slot value isInteger or: [ slot value isFloat ] ]
+]
+
+{ #category : 'slots' }
+PerfUMateGraphWalker >> objects [
+	"Every object of the graph, leaves (numbers, strings...) not included, breadth first from the root"
+
+	self slots.
+	^ visited asArray
 ]
 
 { #category : 'slots' }
@@ -120,6 +130,7 @@ PerfUMateGraphWalker >> walk [
 	| queue |
 	slots := OrderedCollection new.
 	seen := IdentitySet with: root.
+	visited := OrderedCollection with: root.
 	queue := OrderedCollection with: root.
 	(self isLeaf: root) ifTrue: [ ^ self ].
 	[ queue notEmpty and: [ seen size < maxObjects ] ] whileTrue: [
