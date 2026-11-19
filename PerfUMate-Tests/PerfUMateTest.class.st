@@ -92,7 +92,22 @@ PerfUMateTest >> testReportIsSaved [
 	directory := FileSystem memory root / 'out'.
 	report saveTo: directory.
 	self assert: ((directory / 'checkout.md') contents includesSubstring: '# PerfUMate: checkout').
-	self assert: (directory / 'checkout-tests.st') exists
+	self assert: (directory / 'checkout-tests.st') exists.
+	self assertInspectorTabsOf: report
+]
+
+{ #category : 'tests' }
+PerfUMateTest >> assertInspectorTabsOf: aReport [
+	"The Findings, Tests and Grammar tabs build with the inspector's presenter builder"
+
+	| builder findings |
+	builder := SpPresenterBuilder new.
+	builder application: StPharoApplication current.
+	findings := aReport inspectionFindings: builder.
+	self assert: findings items size equals: aReport findings size.
+	self assert: findings columns size equals: 3.
+	self assert: ((aReport inspectionTests: builder) text asString includesSubstring: 'perfumateBenchmark').
+	self assert: ((aReport inspectionGrammar: builder) text asString includesSubstring: 'PerfUMateExampleOrder')
 ]
 
 { #category : 'tests' }

@@ -79,32 +79,42 @@ PerfUMateReport >> grammar [
 ]
 
 { #category : 'inspecting' }
-PerfUMateReport >> inspectionFindings [
+PerfUMateReport >> inspectionFindings: aBuilder [
 
 	<inspectorPresentationOrder: 0 title: 'Findings'>
-	^ SpTablePresenter new
+	^ aBuilder newTable
+		  addStyle: 'stList';
 		  items: findings asArray;
-		  addColumn: (SpStringTableColumn title: 'Kind' evaluated: [ :finding | finding kind ]);
-		  addColumn: (SpStringTableColumn title: 'Finding' evaluated: [ :finding | finding summary ]);
+		  addColumn: ((SpStringTableColumn title: 'Kind' evaluated: [ :finding |
+				    finding isError
+					    ifTrue: [ 'error' ]
+					    ifFalse: [ 'slow input' ] ])
+				   width: 80;
+				   yourself);
+		  addColumn: ((SpStringTableColumn title: 'Finding' evaluated: [ :finding | finding summary ])
+				   width: 520;
+				   yourself);
 		  addColumn: (SpStringTableColumn title: 'Minimized input' evaluated: [ :finding | finding minimizedSton ]);
 		  yourself
 ]
 
 { #category : 'inspecting' }
-PerfUMateReport >> inspectionGrammar [
+PerfUMateReport >> inspectionGrammar: aBuilder [
 
 	<inspectorPresentationOrder: 2 title: 'Grammar'>
-	^ SpTextPresenter new
-		  text: grammar mateDefinition;
+	^ aBuilder newText
+		  text: (grammar mateDefinition copyReplaceAll: String lf with: String cr);
+		  beNotEditable;
 		  yourself
 ]
 
 { #category : 'inspecting' }
-PerfUMateReport >> inspectionTests [
+PerfUMateReport >> inspectionTests: aBuilder [
 
 	<inspectorPresentationOrder: 1 title: 'Tests'>
-	^ SpCodePresenter new
+	^ aBuilder newCode
 		  text: self testSource;
+		  beForScripting;
 		  yourself
 ]
 
