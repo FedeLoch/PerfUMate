@@ -146,10 +146,11 @@ PerfUMateFinding >> summary [
 					  print: baselineMicroseconds rounded;
 					  nextPutAll: ' us)' ]
 			  ifFalse: [
-				  stream
-					  print: signature;
-					  nextPutAll: ': ';
-					  nextPutAll: signature messageText ].
+				  stream print: signature.
+				  signature messageText ifNotEmpty: [ :text |
+					  stream
+						  nextPutAll: ': ';
+						  nextPutAll: text ] ].
 		  brokenRule ifNotNil: [ stream nextPutAll: ' - breaks: ' , brokenRule ].
 		  isMinimized ifFalse: [ stream nextPutAll: ' (not fully minimized)' ] ]
 ]

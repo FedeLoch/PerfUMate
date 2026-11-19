@@ -5,7 +5,7 @@ Give me examples, the code to test, what to look for and a time budget:
 
 	report := PerfUMate new
 		examples: { order1. order2. order3 };
-		target: [ :order | Checkout new process: order ];
+		benchmark: [ :order | Checkout new process: order ];
 		lookFor: #slowInputs;
 		budget: 5 minutes;
 		run.
@@ -20,7 +20,7 @@ Class {
 	#superclass : 'Object',
 	#instVars : [
 		'examples',
-		'target',
+		'benchmark',
 		'intent',
 		'budget',
 		'grammar',
@@ -28,7 +28,14 @@ Class {
 		'widen',
 		'validity',
 		'slowdown',
-		'packagesToInstrument',
+		'toInstrument',
+		'measure',
+		'name',
+		'corpusHeuristic',
+		'mutatorSelector',
+		'mutatorsBlock',
+		'mutationsPerIteration',
+		'maxElements',
 		'seed',
 		'timeout'
 	],
@@ -36,6 +43,16 @@ Class {
 	#package : 'PerfUMate',
 	#tag : 'Core'
 }
+
+{ #category : 'ci' }
+PerfUMate class >> budgetFromEnvironmentOr: aDuration [
+	"PERFUMATE_BUDGET (seconds) when set, else aDuration. Lets CI give short campaigns to pull
+	requests and long ones to nightly runs without changing the code"
+
+	^ (Smalltalk os environment at: 'PERFUMATE_BUDGET' ifAbsent: [ nil ])
+		  ifNil: [ aDuration ]
+		  ifNotNil: [ :seconds | seconds asNumber seconds ]
+]
 
 { #category : 'grammars' }
 PerfUMate class >> grammarFromSource: aString [
@@ -111,14 +128,19 @@ PerfUMate >> initialize [
 	widen := true.
 	validity := 0.9.
 	slowdown := 5.
-	timeout := 2 seconds
+	timeout := 2 seconds.
+	measure := #executionTime.
+	mutationsPerIteration := 2.
+	maxElements := 1024
 ]
 
 { #category : 'api' }
-PerfUMate >> instrument: packageNames [
-	"Packages whose coverage guides #errors. By default, derived from the target"
+PerfUMate >> instrument: methodsClassesOrPackageNames [
+	"What to instrument: methods, classes, or package names. Needed by `measure: #methodCalls` and
+	`measure: #bytecodes`; for #errors it sets the code whose coverage guides the search (by
+	default, derived from the benchmark)"
 
-	packagesToInstrument := packageNames asArray
+	toInstrument := methodsClassesOrPackageNames asArray
 ]
 
 { #category : 'accessing' }
@@ -135,16 +157,115 @@ PerfUMate >> lookFor: anIntentOrGuide [
 ]
 
 { #category : 'accessing' }
-PerfUMate >> packagesToInstrument [
+PerfUMate >> toInstrument [
 
-	^ packagesToInstrument
+	^ toInstrument
+]
+
+{ #category : 'advanced' }
+PerfUMate >> corpusHeuristic [
+
+	^ corpusHeuristic ifNil: [ UmeRandomSelectorHeuristic new ]
+]
+
+{ #category : 'advanced' }
+PerfUMate >> corpusHeuristic: aUmeSelectorHeuristic [
+	"How the next input to mutate is picked from the corpus (default: at random)"
+
+	corpusHeuristic := aUmeSelectorHeuristic
+]
+
+{ #category : 'advanced' }
+PerfUMate >> maxElements [
+
+	^ maxElements
+]
+
+{ #category : 'advanced' }
+PerfUMate >> maxElements: anInteger [
+	"No collection grows past this many elements through the repeat mutator (default 1024)"
+
+	maxElements := anInteger
+]
+
+{ #category : 'advanced' }
+PerfUMate >> mutationsPerIteration [
+
+	^ mutationsPerIteration
+]
+
+{ #category : 'advanced' }
+PerfUMate >> mutationsPerIteration: anInteger [
+	"How many times the selected mutator is applied to the picked input (default 2)"
+
+	mutationsPerIteration := anInteger
+]
+
+{ #category : 'advanced' }
+PerfUMate >> mutatorSelector [
+
+	^ mutatorSelector ifNil: [ UmeMOPTMutatorSelector new ]
+]
+
+{ #category : 'advanced' }
+PerfUMate >> mutatorSelector: aUmeMutatorSelector [
+	"How the mutator is chosen at each step (default: MOpt)"
+
+	mutatorSelector := aUmeMutatorSelector
+]
+
+{ #category : 'advanced' }
+PerfUMate >> mutators: aBlock [
+	"A one argument block answering the mutators, given the PerfUMateSearchSpace. The default
+	is `[ :space | space defaultMutators ]`"
+
+	mutatorsBlock := aBlock
+]
+
+{ #category : 'advanced' }
+PerfUMate >> mutatorsFor: aSearchSpace [
+
+	^ mutatorsBlock
+		  ifNil: [ aSearchSpace defaultMutators ]
+		  ifNotNil: [ mutatorsBlock value: aSearchSpace ]
+]
+
+{ #category : 'accessing' }
+PerfUMate >> name [
+
+	^ name ifNil: [
+		  examples isEmptyOrNil
+			  ifTrue: [ 'perfumate' ]
+			  ifFalse: [ self rootType name ] ]
+]
+
+{ #category : 'api' }
+PerfUMate >> name: aString [
+	"Names the campaign in summaries and saved files"
+
+	name := aString
+]
+
+{ #category : 'accessing' }
+PerfUMate >> measure [
+
+	^ measure
+]
+
+{ #category : 'api' }
+PerfUMate >> measure: aSymbol [
+	"What guides the search for slow inputs: #executionTime (default), #methodCalls or #bytecodes.
+	The last two count what happens in the methods given to #instrument:, which is deterministic
+	and finds growing loops before they show in the time. Findings are always confirmed by time"
+
+	measure := aSymbol
 ]
 
 { #category : 'api' }
 PerfUMate >> receiver: anObject selector: aSelector [
 	"Test `anObject perform: aSelector with: input`"
 
-	target := PerfUMateTarget receiver: anObject selector: aSelector
+	benchmark := PerfUMateBenchmark receiver: anObject selector: aSelector
 ]
 
 { #category : 'accessing' }
@@ -185,16 +306,16 @@ PerfUMate >> slowdown: aNumber [
 ]
 
 { #category : 'accessing' }
-PerfUMate >> target [
+PerfUMate >> benchmark [
 
-	^ target
+	^ benchmark
 ]
 
 { #category : 'api' }
-PerfUMate >> target: aBlock [
+PerfUMate >> benchmark: aBlock [
 	"A one-argument block that runs the code under test on an input"
 
-	target := PerfUMateTarget block: aBlock
+	benchmark := PerfUMateBenchmark block: aBlock
 ]
 
 { #category : 'accessing' }
@@ -214,9 +335,13 @@ PerfUMate >> timeout: aDuration [
 PerfUMate >> validate [
 
 	self validateExamples.
-	target ifNil: [ self error: 'PerfUMate needs a target: target: [ :input | ... ]' ].
+	benchmark ifNil: [ self error: 'PerfUMate needs a benchmark: benchmark: [ :input | ... ]' ].
 	(#( #slowInputs #errors ) includes: intent) | (intent isKindOf: UmeFeedbackGuide) ifFalse: [
-		self error: 'lookFor: expects #slowInputs, #errors or a UmeFeedbackGuide' ]
+		self error: 'lookFor: expects #slowInputs, #errors or a UmeFeedbackGuide' ].
+	(#( #executionTime #methodCalls #bytecodes ) includes: measure) ifFalse: [
+		self error: 'measure: expects #executionTime, #methodCalls or #bytecodes' ].
+	(measure ~= #executionTime and: [ toInstrument isEmptyOrNil ]) ifTrue: [
+		self error: 'measure: #' , measure , ' counts in the instrumented methods: give them with instrument: { ... }' ]
 ]
 
 { #category : 'validation' }

@@ -145,21 +145,63 @@ PerfUMateReport >> setConfiguration: aPerfUMate grammar: aGrammar campaign: aUme
 	elapsed := aDuration
 ]
 
+{ #category : 'saving' }
+PerfUMateReport >> saveTo: aDirectoryName [
+	"Write summary.md and tests.st (the generated test methods) into aDirectoryName. Each
+	report gets its own file names, so several campaigns can share the directory"
+
+	| directory name |
+	directory := aDirectoryName asFileReference.
+	directory ensureCreateDirectory.
+	name := configuration name.
+	(directory / (name , '.md')) writeStreamDo: [ :stream | stream nextPutAll: self summary ].
+	(directory / (name , '-tests.st')) writeStreamDo: [ :stream |
+		stream nextPutAll: (self testSource copyReplaceAll: String cr with: String lf) ].
+	^ directory
+]
+
 { #category : 'accessing' }
 PerfUMateReport >> slowInputs [
 
 	^ findings select: [ :finding | finding isSlowInput ]
 ]
 
-{ #category : 'test generation' }
-PerfUMateReport >> targetMethodSource [
+{ #category : 'printing' }
+PerfUMateReport >> summary [
+	"Markdown, for CI logs and artifacts"
 
 	^ String streamContents: [ :stream |
 		  stream
-			  nextPutAll: 'perfumateTarget';
+			  nextPutAll: '# PerfUMate: ';
+			  nextPutAll: configuration name;
+			  lf;
+			  lf;
+			  print: self;
+			  lf;
+			  lf.
+		  findings isEmpty ifTrue: [ stream nextPutAll: 'No findings.'; lf ].
+		  findings withIndexDo: [ :finding :index |
+			  stream
+				  print: index;
+				  nextPutAll: '. ';
+				  nextPutAll: finding summary;
+				  lf;
+				  lf;
+				  nextPutAll: '    ';
+				  nextPutAll: finding minimizedSton;
+				  lf;
+				  lf ] ]
+]
+
+{ #category : 'test generation' }
+PerfUMateReport >> benchmarkMethodSource [
+
+	^ String streamContents: [ :stream |
+		  stream
+			  nextPutAll: 'perfumateBenchmark';
 			  cr;
 			  tab.
-		  configuration target sourceForTests
+		  configuration benchmark sourceForTests
 			  ifNil: [
 				  stream nextPutAll:
 					  '"The campaign block uses variables from its context: return an equivalent block here"
@@ -172,7 +214,7 @@ PerfUMateReport >> testMethodSources [
 
 	| sources |
 	sources := OrderedCollection new.
-	sources add: self targetMethodSource.
+	sources add: self benchmarkMethodSource.
 	sources add: 'perfumateReferenceInput
 	^ STON fromString: ' , (STON toString: referenceExample) printString.
 	findings withIndexDo: [ :finding :index |

@@ -1,4 +1,5 @@
 SmalltalkCISpec {
+  #preLoading : 'scripts/preLoading.st',
   #loading : [
     SCIMetacelloLoadSpec {
       #baseline : 'PerfUMate',
@@ -8,6 +9,6 @@ SmalltalkCISpec {
     }
   ],
   #testing : {
-    #packages : [ 'PerfUMate-Tests' ]
+    #packages : [ 'PerfUMate', 'PerfUMate-Tests' ]
   }
 }

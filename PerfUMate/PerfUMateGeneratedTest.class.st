@@ -20,11 +20,11 @@ PerfUMateGeneratedTest class >> isAbstract [
 PerfUMateGeneratedTest >> assertInput: anInput isAtMost: aRatio timesSlowerThan: aReferenceInput [
 	"Both inputs are timed in the same run, so the test does not depend on the machine"
 
-	| target inputTime referenceTime |
-	target := PerfUMateTarget block: self perfumateTarget.
-	inputTime := target medianMicrosecondsOn: anInput runs: 5.
+	| benchmark inputTime referenceTime |
+	benchmark := PerfUMateBenchmark block: self perfumateBenchmark.
+	inputTime := benchmark medianMicrosecondsOn: anInput runs: 5.
 	self assert: inputTime notNil description: 'The input raised an error'.
-	referenceTime := (target medianMicrosecondsOn: aReferenceInput runs: 5) ifNil: [ 1 ].
+	referenceTime := (benchmark medianMicrosecondsOn: aReferenceInput runs: 5) ifNil: [ 1 ].
 	self
 		assert: inputTime / (referenceTime max: 1) < aRatio
 		description: [
@@ -35,7 +35,7 @@ PerfUMateGeneratedTest >> assertInput: anInput isAtMost: aRatio timesSlowerThan:
 { #category : 'asserting' }
 PerfUMateGeneratedTest >> assertNoErrorOn: anInput [
 
-	self shouldnt: [ self perfumateTarget value: anInput ] raise: Error
+	self shouldnt: [ self perfumateBenchmark value: anInput ] raise: Error
 ]
 
 { #category : 'accessing' }
@@ -45,7 +45,7 @@ PerfUMateGeneratedTest >> perfumateReferenceInput [
 ]
 
 { #category : 'accessing' }
-PerfUMateGeneratedTest >> perfumateTarget [
+PerfUMateGeneratedTest >> perfumateBenchmark [
 
 	^ self subclassResponsibility
 ]

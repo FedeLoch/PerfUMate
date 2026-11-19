@@ -20,7 +20,7 @@ reduce object graphs, and the report. Things that should move upstream are liste
 ```smalltalk
 report := PerfUMate new
     examples: { order1. order2. order3 };                 "Mate infers the grammar"
-    target: [ :order | Checkout new process: order ];     "or receiver: aCheckout selector: #process:"
+    benchmark: [ :order | Checkout new process: order ];  "or receiver: aCheckout selector: #process:"
     lookFor: #slowInputs;                                  "or #errors, or a UmeFeedbackGuide"
     budget: 5 minutes;
     run.
@@ -37,7 +37,9 @@ These five calls are enough. The rest is optional:
 | `widen:` | `true` | turn off widening |
 | `validity:` | `0.9` | share of generated graphs that respect every rule |
 | `slowdown:` | `5` | a slow input must be at least this many times slower than the median |
-| `instrument:` | from the target | packages whose coverage guides `#errors` |
+| `measure:` | `#executionTime` | `#methodCalls` or `#bytecodes` count in the instrumented methods |
+| `instrument:` | from the benchmark | methods, classes or package names; required by `#methodCalls` and `#bytecodes` |
+| `name:` | root class name | names summaries and saved reports |
 | `seed:` | random | reproducible generation |
 | `timeout:` | `2 seconds` | runs are stopped after this; a timeout counts as a slow input |
 
@@ -62,13 +64,13 @@ plain SUnit tests, committed with the project and run by its usual test job (sec
 | --- | --- |
 | `examples:` | `MateOGGrammar inferFrom: examples` (`MateGrammarInferrer`), then `PerfUMateGrammarWidener`. The root type is the class of the first example. |
 | `grammar:` with text | `MateOGGrammar new addTypeDeclarations: (MateLanguageParser parse: text)` |
-| `target:` | a `PerfUMateTarget` wraps the block; the Ume schema calls `PerfUMateTarget >> #runOn:`. `receiver:selector:` builds the block. |
-| `run` | `UmeSchema` (receiver: the target, one argument: a `UmeCorpusGenerator`) and `UmeRunner test:for:` |
+| `benchmark:` | a `PerfUMateBenchmark` wraps the block; the Ume schema calls `PerfUMateBenchmark >> #runOn:`. `receiver:selector:` builds the block. |
+| `run` | `UmeSchema` (receiver: the benchmark, one argument: a `UmeCorpusGenerator`) and `UmeRunner test:for:` |
 | corpus | `UmeCorpusGenerator` seeded with the examples, `UmeMOPTMutatorSelector`, 2 mutations per iteration |
-| `#slowInputs` | `runner guidedByExecutionTime`, only the target instrumented |
+| `#slowInputs` | `runner guidedByExecutionTime` (or `guidedByMethodsCalls`, `guidedByBytecodes` with `measure:`), only the entry point instrumented for time |
 | `#errors` | `PerfUMateCoverageAndErrorsGuide` (covered nodes and error messages in one table), coverage over the `instrument:` packages |
 | a guide | any `UmeFeedbackGuide`, installed in the runner's `UmeFeedbackEvaluator` |
-| confirmation | `PerfUMateTarget >> medianMicrosecondsOn:runs:` and `errorSignatureOn:` |
+| confirmation | `PerfUMateBenchmark >> medianMicrosecondsOn:runs:` and `errorSignatureOn:` |
 | minimization | `PerfUMateGraphShrinker`: walks the graph and runs Shin's `ShinDDminPaperShrinker` with a `ShinBooleanInputOracle` on each collection and string |
 | broken rule | message of `grammar parse:` on the minimized graph |
 | tests | STON of the minimized input, as in `UmeTest >> installUnitTestIn:` |
@@ -117,7 +119,7 @@ within the declared sizes. Neither Ume nor Mate had such a mutator, so it is her
 ### 3.4 Guides
 
 - `#slowInputs`: execution time (`UmeExecutionTimeGuide`, log buckets so noise is not
-  rewarded). Only the target is instrumented to keep each run cheap.
+  rewarded). Only the entry point is instrumented to keep each run cheap.
 - `#errors`: coverage and errors together. A new covered node or a new error message is
   progress. A Ume runner has a single guide, hence `PerfUMateCoverageAndErrorsGuide`.
 
@@ -151,7 +153,7 @@ The oracle checks the behavior:
 - if the original graph respected the grammar, the candidate must too, so minimization does
   not add a broken rule.
 
-Candidates run on a `veryDeepCopy`, so a target that modifies its argument does not affect
+Candidates run on a `veryDeepCopy`, so a benchmark that modifies its argument does not affect
 the shrinker.
 
 ### 3.7 Budget
@@ -167,7 +169,7 @@ minimization did not finish is still reported, marked as not fully minimized.
   10 to 100 times fewer inputs per second than byte mutation. Here every input is a
   `PerfUMateInput` (graph and key) and `PerfUMateSearchSpace` maps the key to the derivation
   that built it. Chained mutations reuse the tree; `grammar parse:` only runs when the key is
-  unknown (examples, inputs changed by the repeat or primitive mutators). The target gets a copy
+  unknown (examples, inputs changed by the repeat or primitive mutators). The benchmark gets a copy
   of the graph, never the derivation's own instance.
 - Mate alone misses almost valid inputs (a truncated string in a field, a number one past a
   bound). Derivation mutation regenerates whole values and rarely turns `'VIP10'` into `'VI'`.
@@ -177,7 +179,13 @@ minimization did not finish is still reported, marked as not fully minimized.
 - Invalid graphs cannot be parsed. Inputs grown by the repeat mutator break size rules, so only
   the repeat and primitive mutators apply to them (see `checkSizes:` below).
 - Timing is noisy: log buckets during the search, medians and runs in isolation afterwards.
-- Pharo 13 has no `Time microsecondsToRun:`; `PerfUMateTarget class >> microsecondsToRun:`
+- Instrumenting the package of a Playground block instruments Kernel (a DoIt belongs to
+  `UndefinedObject`) and freezes the image. Without `instrument:`, the scope comes from the
+  classes the block references, and system packages are never instrumented.
+- Loading Mate's dependencies downloads Bloc's fonts from GitHub, whose answers have header lines
+  longer than Zinc accepts (`ZnLineTooLong`). CI runs `scripts/preLoading.st` first, which raises
+  the limit.
+- Pharo 13 has no `Time microsecondsToRun:`; `PerfUMateBenchmark class >> microsecondsToRun:`
   uses `Time microsecondClockValue`.
 
 ## 5. Packages
@@ -187,7 +195,7 @@ BaselineOfPerfUMate/   Ume, Mate and Shin from GitHub
 PerfUMate/
   PerfUMate                     configuration and run
   PerfUMateCampaign             baseline, Ume campaign, confirmation, minimization
-  PerfUMateTarget               code under test: runs, timing, timeouts, errors
+  PerfUMateBenchmark               the benchmark: runs, timing, timeouts, errors, instrumentation scope
   PerfUMateInput                graph and derivation key (what the corpus holds)
   PerfUMateSearchSpace          grammar, validity, derivation cache
   PerfUMateErrorSignature, PerfUMateTimeout
@@ -196,7 +204,7 @@ PerfUMate/
   PerfUMateGraphWalker, PerfUMateSlot
   PerfUMateCoverageAndErrorsGuide
   PerfUMateGraphShrinker
-  PerfUMateFinding, PerfUMateReport, PerfUMateGeneratedTest
+  PerfUMateFinding, PerfUMateReport, PerfUMateGeneratedTest, PerfUMateCampaignTest
 PerfUMate-Tests/
   PerfUMateExampleOrder, Item, Checkout, PerfUMateExamples   small domain, one slow path, one crash
   PerfUMateTest        whole flow: slow inputs, errors
@@ -234,10 +242,14 @@ Shin
 ## 7. Nightly CI (next)
 
 Goal: short campaigns every night on several Pharo projects, with findings turned into tests.
-Already there: `generateTestsIn:package:` and `testSource` (inputs as STON, the target as code
+Already there: `generateTestsIn:package:` and `testSource` (inputs as STON, the benchmark as code
 when the block does not use its context), and a report without UI dependencies except `open`.
 
-To do:
+Done since: `PerfUMateCampaignTest` runs a campaign as an SUnit test, `PERFUMATE_BUDGET`
+overrides budgets, and `report saveTo:` writes the summary and the tests for CI artifacts (see
+[GITHUB-ACTIONS.md](GITHUB-ACTIONS.md)).
+
+Still to do:
 
 1. Campaigns declared in code: class side methods with a `<perfumate>` pragma answering a
    configured `PerfUMate`.

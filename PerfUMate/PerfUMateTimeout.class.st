@@ -1,5 +1,5 @@
 "
-I am signaled when the target does not finish within its timeout.
+I am signaled when the benchmark does not finish within its timeout.
 "
 Class {
 	#name : 'PerfUMateTimeout',

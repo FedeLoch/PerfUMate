@@ -15,7 +15,7 @@ Class {
 		'configuration',
 		'grammar',
 		'space',
-		'target',
+		'benchmark',
 		'startTime',
 		'deadline',
 		'baselineMicroseconds',
@@ -50,7 +50,7 @@ PerfUMateCampaign >> confirmedSlowCandidatesIn: aUmeResult [
 
 	| timed |
 	timed := (self slowCandidatesIn: aUmeResult)
-		         collect: [ :graph | graph -> (target medianMicrosecondsOn: graph runs: 3) ]
+		         collect: [ :graph | graph -> (benchmark medianMicrosecondsOn: graph runs: 3) ]
 		         thenSelect: [ :each | each value notNil ].
 	^ ((timed asSortedCollection: [ :a :b | a value >= b value ]) asArray first: (timed size min: 2))
 		  collect: [ :each | each key ]
@@ -61,7 +61,7 @@ PerfUMateCampaign >> errorFindingFor: aGraph signature: aSignature until: aDeadl
 
 	| minimized |
 	minimized := self minimize: aGraph until: aDeadline while: [ :graph |
-		             (target errorSignatureOn: graph) = aSignature ].
+		             (benchmark errorSignatureOn: graph) = aSignature ].
 	^ PerfUMateFinding new
 		  setKind: #error
 		  original: aGraph
@@ -77,7 +77,7 @@ PerfUMateCampaign >> findingFor: aGraph until: aDeadline [
 	"Confirm aGraph alone and minimize it. nil when it does not reproduce"
 
 	| signature |
-	signature := target errorSignatureOn: aGraph.
+	signature := benchmark errorSignatureOn: aGraph.
 	(signature isNil or: [ signature isTimeout ]) ifTrue: [ ^ self slowFindingFor: aGraph until: aDeadline ].
 	^ self errorFindingFor: aGraph signature: signature until: aDeadline
 ]
@@ -113,7 +113,10 @@ PerfUMateCampaign >> guide: aRunner [
 
 	| guide evaluator |
 	aRunner guidedByExecutionTime.
-	configuration intent = #slowInputs ifTrue: [ ^ self ].
+	configuration intent = #slowInputs ifTrue: [
+		configuration measure = #methodCalls ifTrue: [ aRunner guidedByMethodsCalls ].
+		configuration measure = #bytecodes ifTrue: [ aRunner guidedByBytecodes ].
+		^ self ].
 	guide := configuration intent = #errors
 		         ifTrue: [ PerfUMateCoverageAndErrorsGuide new ]
 		         ifFalse: [ configuration intent ].
@@ -138,17 +141,17 @@ PerfUMateCampaign >> measureBaseline [
 	| until exampleTimes times |
 	until := startTime + (configuration budget * 0.1).
 	exampleTimes := configuration examples
-		                collect: [ :example | example -> (target medianMicrosecondsOn: example runs: 3) ]
+		                collect: [ :example | example -> (benchmark medianMicrosecondsOn: example runs: 3) ]
 		                thenSelect: [ :each | each value notNil ].
 	times := OrderedCollection withAll: (exampleTimes collect: [ :each | each value ]).
 	20 timesRepeat: [
 		DateAndTime now < until ifTrue: [
-			[ (target medianMicrosecondsOn: space generateValidGraph runs: 3) ifNotNil: [ :time | times add: time ] ]
+			[ (benchmark medianMicrosecondsOn: space generateValidGraph runs: 3) ifNotNil: [ :time | times add: time ] ]
 				on: Error
 				do: [ :error | error return: nil ] ] ].
 	baselineMicroseconds := times isEmpty
 		                        ifTrue: [ 1 ]
-		                        ifFalse: [ (PerfUMateTarget median: times) max: 1 ].
+		                        ifFalse: [ (PerfUMateBenchmark median: times) max: 1 ].
 	referenceExample := exampleTimes isEmpty
 		                    ifTrue: [ configuration examples first ]
 		                    ifFalse: [
@@ -175,14 +178,18 @@ PerfUMateCampaign >> isClearlySlow: aGraph limit: aLimit [
 	on the threshold where timing noise decides. A median, because one GC pause is enough to make
 	a small input look slow"
 
-	^ ((target medianMicrosecondsOn: aGraph runs: 3) ifNil: [ 0 ]) >= (aLimit * 2)
+	^ ((benchmark medianMicrosecondsOn: aGraph runs: 3) ifNil: [ 0 ]) >= (aLimit * 2)
 ]
 
 { #category : 'instrumentation' }
 PerfUMateCampaign >> methodsToInstrument [
 
-	configuration intent = #slowInputs ifTrue: [ ^ { PerfUMateTarget >> #runOn: } ].
-	^ target methodsToInstrumentIn: configuration packagesToInstrument
+	(configuration intent = #slowInputs and: [ configuration measure = #executionTime ]) ifTrue: [
+		^ { PerfUMateBenchmark >> #runOn: } ].
+	"A custom guide only needs what the user asks to instrument"
+	(configuration intent isSymbol not and: [ configuration toInstrument isEmptyOrNil ]) ifTrue: [
+		^ { PerfUMateBenchmark >> #runOn: } ].
+	^ benchmark methodsToInstrumentIn: configuration toInstrument
 ]
 
 { #category : 'running' }
@@ -194,9 +201,10 @@ PerfUMateCampaign >> run [
 	deadline := startTime + configuration budget.
 	grammar := configuration grammar.
 	configuration seed ifNotNil: [ :seed | grammar seed: seed ].
-	target := configuration target.
-	target timeout: configuration timeout.
+	benchmark := configuration benchmark.
+	benchmark timeout: configuration timeout.
 	space := PerfUMateSearchSpace grammar: grammar rootType: configuration rootType validity: configuration validity.
+	space maxElements: configuration maxElements.
 	self measureBaseline.
 	umeResult := self runUmeFor: deadline - (configuration budget * 0.2) - DateAndTime now.
 	findings := self findingsFrom: umeResult.
@@ -216,15 +224,16 @@ PerfUMateCampaign >> runUmeFor: aDuration [
 	| corpus schema runner |
 	corpus := UmeCorpusGenerator new
 		          seeds: (configuration examples collect: [ :example | space inputForGraph: example veryDeepCopy ]);
-		          mutators: space defaultMutators;
-		          mutationsPerIteration: 2;
+		          mutators: (configuration mutatorsFor: space);
+		          mutationsPerIteration: configuration mutationsPerIteration;
+		          heuristic: configuration corpusHeuristic;
 		          yourself.
-	corpus mutatorSelector: UmeMOPTMutatorSelector new.
+	corpus mutatorSelector: configuration mutatorSelector.
 	schema := UmeSchema new
-		          receiverConstraint: (UmeObjectConstraint new generator: (UmeGenerator always: target));
+		          receiverConstraint: (UmeObjectConstraint new generator: (UmeGenerator always: benchmark));
 		          argumentConstraints: { (UmeObjectConstraint new generator: corpus) };
 		          property: [ :receiver :arguments :result | true ];
-		          method: PerfUMateTarget >> #runOn:;
+		          method: PerfUMateBenchmark >> #runOn:;
 		          yourself.
 	runner := UmeRunner test: schema for: (aDuration max: 1 second).
 	self guide: runner.
@@ -260,11 +269,11 @@ PerfUMateCampaign >> slowCandidatesIn: aUmeResult [
 PerfUMateCampaign >> slowFindingFor: aGraph until: aDeadline [
 
 	| median limit minimized minimizedMedian |
-	median := (target medianMicrosecondsOn: aGraph runs: 5) ifNil: [ ^ nil ].
+	median := (benchmark medianMicrosecondsOn: aGraph runs: 5) ifNil: [ ^ nil ].
 	limit := baselineMicroseconds * configuration slowdown.
 	median < limit ifTrue: [ ^ nil ].
 	minimized := self minimize: aGraph until: aDeadline while: [ :graph | self isClearlySlow: graph limit: limit ].
-	minimizedMedian := (target medianMicrosecondsOn: minimized key runs: 5) ifNil: [ 0 ].
+	minimizedMedian := (benchmark medianMicrosecondsOn: minimized key runs: 5) ifNil: [ 0 ].
 	minimizedMedian < limit ifTrue: [
 		"The minimized input does not reproduce when measured again: report the original"
 		minimized := aGraph -> false.

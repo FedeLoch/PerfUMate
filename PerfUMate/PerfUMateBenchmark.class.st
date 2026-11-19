@@ -5,7 +5,7 @@ checks my errors directly (#medianMicrosecondsOn:runs:, #errorSignatureOn:).
 Every run is bounded by a timeout: an input that does not finish is the slowest input of all.
 "
 Class {
-	#name : 'PerfUMateTarget',
+	#name : 'PerfUMateBenchmark',
 	#superclass : 'Object',
 	#instVars : [
 		'block',
@@ -19,13 +19,13 @@ Class {
 }
 
 { #category : 'instance creation' }
-PerfUMateTarget class >> block: aBlock [
+PerfUMateBenchmark class >> block: aBlock [
 
 	^ self new setBlock: aBlock
 ]
 
 { #category : 'statistics' }
-PerfUMateTarget class >> median: numbers [
+PerfUMateBenchmark class >> median: numbers [
 
 	| sorted |
 	sorted := numbers asSortedCollection asArray.
@@ -33,7 +33,7 @@ PerfUMateTarget class >> median: numbers [
 ]
 
 { #category : 'statistics' }
-PerfUMateTarget class >> microsecondsToRun: aBlock [
+PerfUMateBenchmark class >> microsecondsToRun: aBlock [
 
 	| start |
 	start := Time microsecondClockValue.
@@ -42,26 +42,26 @@ PerfUMateTarget class >> microsecondsToRun: aBlock [
 ]
 
 { #category : 'instance creation' }
-PerfUMateTarget class >> receiver: anObject selector: aSelector [
+PerfUMateBenchmark class >> receiver: anObject selector: aSelector [
 
 	^ self new setReceiver: anObject selector: aSelector
 ]
 
 { #category : 'accessing' }
-PerfUMateTarget >> block [
+PerfUMateBenchmark >> block [
 
 	^ block
 ]
 
 { #category : 'copying' }
-PerfUMateTarget >> deepCopy [
+PerfUMateBenchmark >> deepCopy [
 	"I am configuration, not state: Ume copies every receiver it runs, I can be shared"
 
 	^ self
 ]
 
 { #category : 'running' }
-PerfUMateTarget >> errorSignatureOn: aGraph [
+PerfUMateBenchmark >> errorSignatureOn: aGraph [
 	"nil when aGraph runs fine, else what went wrong (class and signaling method)"
 
 	^ [
@@ -72,7 +72,7 @@ PerfUMateTarget >> errorSignatureOn: aGraph [
 ]
 
 { #category : 'private' }
-PerfUMateTarget >> isSelfContained: aBlockNode [
+PerfUMateBenchmark >> isSelfContained: aBlockNode [
 
 	block numCopiedValues > 0 ifTrue: [ ^ false ].
 	^ aBlockNode allChildren noneSatisfy: [ :each |
@@ -82,7 +82,7 @@ PerfUMateTarget >> isSelfContained: aBlockNode [
 ]
 
 { #category : 'running' }
-PerfUMateTarget >> medianMicrosecondsOn: aGraph runs: count [
+PerfUMateBenchmark >> medianMicrosecondsOn: aGraph runs: count [
 	"nil if aGraph raises an error"
 
 	| times |
@@ -92,27 +92,60 @@ PerfUMateTarget >> medianMicrosecondsOn: aGraph runs: count [
 ]
 
 { #category : 'instrumentation' }
-PerfUMateTarget >> methodsToInstrumentIn: packageNames [
-	"Coverage scope for #errors: the given packages, the method behind receiver/selector, or the
-	package where the target block was written"
+PerfUMateBenchmark >> methodsIn: aMethodClassOrPackageName [
 
-	| package |
-	packageNames isEmptyOrNil ifFalse: [
-		^ (packageNames flatCollect: [ :name | (self packageOrganizer packageNamed: name) methods ])
-			  reject: [ :method | method methodClass inheritsFrom: TestCase ] ].
+	aMethodClassOrPackageName isCompiledMethod ifTrue: [ ^ { aMethodClassOrPackageName } ].
+	aMethodClassOrPackageName isBehavior ifTrue: [
+		^ aMethodClassOrPackageName methods , aMethodClassOrPackageName class methods ].
+	^ (self packageOrganizer packageNamed: aMethodClassOrPackageName) methods reject: [ :method |
+		  method methodClass inheritsFrom: TestCase ]
+]
+
+{ #category : 'instrumentation' }
+PerfUMateBenchmark >> classesReferencedBy: aCompiledCode into: aSet [
+
+	aCompiledCode literals do: [ :literal |
+		(literal isVariableBinding and: [ literal value isBehavior ]) ifTrue: [ aSet add: literal value ].
+		literal isCompiledBlock ifTrue: [ self classesReferencedBy: literal into: aSet ] ].
+	^ aSet
+]
+
+{ #category : 'instrumentation' }
+PerfUMateBenchmark >> isSystemPackage: aPackage [
+	"Never instrument these: instrumenting Kernel or Collections would instrument everything the
+	image runs"
+
+	| packageName |
+	aPackage ifNil: [ ^ true ].
+	packageName := aPackage name.
+	(#( 'PerfUMate' 'Ume' 'Mate' 'Shin' 'Coverage2' ) includes: packageName) ifTrue: [ ^ true ].
+	^ #( 'Kernel' 'Collections' 'System' 'Announcements' 'Text' 'Files' 'FileSystem' 'Zinc' 'STON'
+	     'OpalCompiler' 'AST' 'Debugging' 'Morphic' 'Spec' 'UndefinedObject' ) anySatisfy: [ :prefix |
+		  packageName beginsWith: prefix ]
+]
+
+{ #category : 'instrumentation' }
+PerfUMateBenchmark >> methodsToInstrumentIn: someMethodsClassesOrPackageNames [
+	"The given methods, classes and packages. Else: the method behind receiver/selector and what
+	it sends in its package, or the packages of the classes the benchmark block references (not
+	the package where the block was written, which for a Playground is Kernel's)"
+
+	| packages |
+	someMethodsClassesOrPackageNames isEmptyOrNil ifFalse: [
+		^ (someMethodsClassesOrPackageNames flatCollect: [ :each | self methodsIn: each ]) asSet asArray ].
 	selector ifNotNil: [
 		^ (receiver class lookupSelector: selector)
-			  ifNil: [ { PerfUMateTarget >> #runOn: } ]
-			  ifNotNil: [ :method | method sendReachableMethods ] ].
-	package := [ block method package ]
-		           on: Error
-		           do: [ :error | error return: nil ].
-	(package isNil or: [ package name = 'PerfUMate' ]) ifTrue: [ ^ { PerfUMateTarget >> #runOn: } ].
-	^ package methods reject: [ :method | method methodClass inheritsFrom: TestCase ]
+			  ifNil: [ { PerfUMateBenchmark >> #runOn: } ]
+			  ifNotNil: [ :method | method sendReachableMethods asArray ] ].
+	packages := ((self classesReferencedBy: block compiledBlock into: Set new) collect: [ :class |
+		             class package ]) reject: [ :package | self isSystemPackage: package ].
+	packages ifEmpty: [ ^ { PerfUMateBenchmark >> #runOn: } ].
+	^ (packages flatCollect: [ :package | package methods ]) asArray reject: [ :method |
+		  method methodClass inheritsFrom: TestCase ]
 ]
 
 { #category : 'running' }
-PerfUMateTarget >> microsecondsOn: aGraph [
+PerfUMateBenchmark >> microsecondsOn: aGraph [
 	"Time one run on a private copy. Fast runs are repeated on 20 copies and averaged.
 	A timeout counts as the whole timeout, an error answers nil"
 
@@ -128,20 +161,20 @@ PerfUMateTarget >> microsecondsOn: aGraph [
 ]
 
 { #category : 'running' }
-PerfUMateTarget >> runOn: anInput [
+PerfUMateBenchmark >> runOn: anInput [
 	"The method Ume's schema calls"
 
 	^ self valueWith: anInput graph
 ]
 
 { #category : 'initialization' }
-PerfUMateTarget >> setBlock: aBlock [
+PerfUMateBenchmark >> setBlock: aBlock [
 
 	block := aBlock
 ]
 
 { #category : 'initialization' }
-PerfUMateTarget >> setReceiver: anObject selector: aSelector [
+PerfUMateBenchmark >> setReceiver: anObject selector: aSelector [
 
 	receiver := anObject.
 	selector := aSelector.
@@ -149,7 +182,7 @@ PerfUMateTarget >> setReceiver: anObject selector: aSelector [
 ]
 
 { #category : 'running' }
-PerfUMateTarget >> singleRunMicrosecondsOn: aGraph [
+PerfUMateBenchmark >> singleRunMicrosecondsOn: aGraph [
 
 	| copy |
 	copy := aGraph veryDeepCopy.
@@ -162,7 +195,7 @@ PerfUMateTarget >> singleRunMicrosecondsOn: aGraph [
 ]
 
 { #category : 'test generation' }
-PerfUMateTarget >> sourceForTests [
+PerfUMateBenchmark >> sourceForTests [
 	"Source of a block equivalent to me, or nil when the block uses its context"
 
 	| node |
@@ -177,19 +210,19 @@ PerfUMateTarget >> sourceForTests [
 ]
 
 { #category : 'accessing' }
-PerfUMateTarget >> timeout [
+PerfUMateBenchmark >> timeout [
 
 	^ timeout ifNil: [ 2 seconds ]
 ]
 
 { #category : 'accessing' }
-PerfUMateTarget >> timeout: aDuration [
+PerfUMateBenchmark >> timeout: aDuration [
 
 	timeout := aDuration
 ]
 
 { #category : 'running' }
-PerfUMateTarget >> valueWith: aGraph [
+PerfUMateBenchmark >> valueWith: aGraph [
 
 	^ [ block value: aGraph ]
 		  valueWithin: self timeout
@@ -197,7 +230,7 @@ PerfUMateTarget >> valueWith: aGraph [
 ]
 
 { #category : 'copying' }
-PerfUMateTarget >> veryDeepCopyWith: aDeepCopier [
+PerfUMateBenchmark >> veryDeepCopyWith: aDeepCopier [
 
 	^ self
 ]

@@ -32,21 +32,33 @@ PerfUMatePartsTest >> testDerivationIsKeptWithTheInput [
 	derivation := space generateDerivation: 1.
 	input := space inputFor: derivation.
 	self assert: (space takeDerivationFor: input) identicalTo: derivation.
-	"The target gets a snapshot, not the derivation's own graph"
+	"The benchmark gets a snapshot, not the derivation's own graph"
 	self deny: input graph identicalTo: derivation instance
 ]
 
 { #category : 'tests' }
 PerfUMatePartsTest >> testErrorSignature [
 
-	| target signature |
-	target := PerfUMateTarget block: [ :order | PerfUMateExampleCheckout new process: order ].
-	self assert: (target errorSignatureOn: self order) isNil.
-	signature := target errorSignatureOn: (self order coupon: 'V'; yourself).
+	| benchmark signature |
+	benchmark := PerfUMateBenchmark block: [ :order | PerfUMateExampleCheckout new process: order ].
+	self assert: (benchmark errorSignatureOn: self order) isNil.
+	signature := benchmark errorSignatureOn: (self order coupon: 'V'; yourself).
 	self deny: signature isNil.
 	self
 		assert: signature
-		equals: (target errorSignatureOn: (self order coupon: ''; yourself))
+		equals: (benchmark errorSignatureOn: (self order coupon: ''; yourself))
+]
+
+{ #category : 'tests' }
+PerfUMatePartsTest >> testInstrumentationNeverReachesSystemPackages [
+	"A block written in a Playground is a DoIt of UndefinedObject: its package must not be used"
+
+	| block methods |
+	block := Smalltalk compiler evaluate: '[ :order | PerfUMateExampleCheckout new process: order ]'.
+	methods := (PerfUMateBenchmark block: block) methodsToInstrumentIn: nil.
+	self assert: (methods includes: PerfUMateExampleCheckout >> #loyaltyPointsFor:).
+	self deny: (methods anySatisfy: [ :method | method methodClass == UndefinedObject or: [ method methodClass == Object ] ]).
+	self deny: (methods anySatisfy: [ :method | method methodClass inheritsFrom: TestCase ])
 ]
 
 { #category : 'tests' }
@@ -133,11 +145,11 @@ PerfUMatePartsTest >> testShrinkerMinimizesStrings [
 { #category : 'tests' }
 PerfUMatePartsTest >> testTimeoutCountsAsSlow [
 
-	| target |
-	target := PerfUMateTarget block: [ :x | (Delay forSeconds: 5) wait ].
-	target timeout: 100 milliSeconds.
-	self assert: (target errorSignatureOn: 1) isTimeout.
-	self assert: (target singleRunMicrosecondsOn: 1) equals: 100000
+	| benchmark |
+	benchmark := PerfUMateBenchmark block: [ :x | (Delay forSeconds: 5) wait ].
+	benchmark timeout: 100 milliSeconds.
+	self assert: (benchmark errorSignatureOn: 1) isTimeout.
+	self assert: (benchmark singleRunMicrosecondsOn: 1) equals: 100000
 ]
 
 { #category : 'tests' }

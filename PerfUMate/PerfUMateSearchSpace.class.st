@@ -114,7 +114,7 @@ PerfUMateSearchSpace >> grammar [
 
 { #category : 'inputs' }
 PerfUMateSearchSpace >> inputFor: aDerivation [
-	"The target gets a snapshot; the derivation keeps its own instance to be mutated later"
+	"The benchmark gets a snapshot; the derivation keeps its own instance to be mutated later"
 
 	^ PerfUMateInput graph: aDerivation instance veryDeepCopy key: (self register: aDerivation)
 ]

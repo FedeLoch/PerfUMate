@@ -6,7 +6,7 @@ I minimize an object graph with Shin while an oracle (a block on the graph) keep
 3. every number is replaced by 0, 1 or -1, or halved toward 0;
 
 and I repeat until nothing shrinks or the deadline passes. Each change is made in place and
-undone when the oracle rejects it, so the oracle should run the target on a copy.
+undone when the oracle rejects it, so the oracle should run the benchmark on a copy.
 "
 Class {
 	#name : 'PerfUMateGraphShrinker',
