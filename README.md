@@ -208,18 +208,18 @@ Only `examples:` and `benchmark:` are required.
 | `seed:` | random | Makes generation reproducible. |
 
 Advanced options (`mutators:`, `mutatorSelector:`, `corpusHeuristic:`, `mutationsPerIteration:`,
-`maxElements:`) are explained in [docs/TECHNICAL.md](docs/TECHNICAL.md) and shown in
-[docs/EXAMPLES.md](docs/EXAMPLES.md#9-choosing-mutators-selector-and-corpus-heuristic).
+`maxElements:`) are explained in [Technical architecture](https://github.com/FedeLoch/PerfUMate/wiki/PerfUMate-Technical-Architecture) and shown in
+[Examples](https://github.com/FedeLoch/PerfUMate/wiki/Examples#9-choosing-mutators-selector-and-corpus-heuristic).
 
 ## In CI
 
 A campaign can run as an SUnit test: subclass `PerfUMateCampaignTest` and call
 `assertNoFindings:`. `PERFUMATE_BUDGET` (seconds) changes the budget without touching the code,
 so pull requests can run short campaigns and nightly jobs long ones. See
-[docs/GITHUB-ACTIONS.md](docs/GITHUB-ACTIONS.md).
+[GitHub Actions integration](https://github.com/FedeLoch/PerfUMate/wiki/GitHub-Actions-Integration).
 
 ## More
 
-- [docs/EXAMPLES.md](docs/EXAMPLES.md): step by step examples, from the minimal campaign to custom guides.
-- [docs/TECHNICAL.md](docs/TECHNICAL.md): how each part works and can be configured (corpus, grammar mutators, MOpt, feedback, weighted grammars, instrumentation, metrics).
-- [docs/DESIGN.md](docs/DESIGN.md): design notes and proposed changes to Ume, Mate and Shin.
+- [Examples](https://github.com/FedeLoch/PerfUMate/wiki/Examples): step by step examples, from the minimal campaign to custom guides.
+- [Technical architecture](https://github.com/FedeLoch/PerfUMate/wiki/PerfUMate-Technical-Architecture): how each part works and can be configured (corpus, grammar mutators, MOpt, feedback, weighted grammars, instrumentation, metrics).
+- [Design](https://github.com/FedeLoch/PerfUMate/wiki/PerfUMate-design): design notes and proposed changes to Ume, Mate and Shin.
