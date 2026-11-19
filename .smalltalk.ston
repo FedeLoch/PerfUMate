@@ -1,0 +1,13 @@
+SmalltalkCISpec {
+  #loading : [
+    SCIMetacelloLoadSpec {
+      #baseline : 'PerfUMate',
+      #directory : '',
+      #onConflict : #useIncoming,
+      #platforms : [ #pharo ]
+    }
+  ],
+  #testing : {
+    #packages : [ 'PerfUMate-Tests' ]
+  }
+}
