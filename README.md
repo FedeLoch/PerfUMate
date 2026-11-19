@@ -1,19 +1,15 @@
-<p align="center">
-  <img src="images/logo.svg" alt="PerfUMate" width="380"/>
-</p>
+# PerfUMate
+
+Performance fuzzing for Pharo, from a few example objects.
+
+PerfUMate looks for the inputs that make your code slow. You give it some example objects and
+the code to test. It infers what valid inputs look like, searches for the ones that take the
+longest, reduces each one to a small input that is still slow, and generates an SUnit test for
+it. Crashes found on the way are reported too, and `lookFor: #errors` searches for any kind of
+bug instead.
 
 <p align="center">
-  Fuzzing for Pharo objects: crashes and slow inputs from a few examples.
-</p>
-
----
-
-PerfUMate takes some example objects and the code you want to test. It infers what valid
-inputs look like, searches for inputs that break or slow down your code, reduces each one to a
-small input, and generates an SUnit test for it.
-
-<p align="center">
-  <img src="images/flow.svg" alt="Examples, Mate grammar, Ume campaign, Shin minimization, report and tests" width="820"/>
+  <img src="images/flow.svg" alt="examples, Mate, Ume, Shin, tests" width="680"/>
 </p>
 
 ## Install
@@ -32,7 +28,7 @@ Metacello new
 report := PerfUMate new
     examples: { order1. order2. order3 };
     target: [ :order | Checkout new process: order ];
-    lookFor: #slowInputs;          "or #errors"
+    lookFor: #slowInputs;          "the default; #errors for any kind of bug"
     budget: 5 minutes;
     run.
 

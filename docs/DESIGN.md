@@ -1,7 +1,11 @@
 # PerfUMate design
 
-PerfUMate is a small API to look for bugs and performance problems in Pharo code starting
-from a few example objects. It has no search algorithm of its own. It connects:
+PerfUMate is a small API to find performance bugs in Pharo code starting from a few example
+objects: inputs that make the code much slower than usual (super-linear loops, repeated
+structures, pathological values). Performance is the main use and the default
+(`lookFor: #slowInputs`), but the same pipeline finds other bugs: errors found while looking
+for slow inputs are reported, and `lookFor: #errors` (or a custom guide) searches for them
+directly. It has no search algorithm of its own. It connects:
 
 - Mate: object graph grammars (inference from examples, MCTS generation, derivation
   mutation, `validity` to break one rule),
