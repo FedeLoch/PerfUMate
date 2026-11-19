@@ -18,7 +18,7 @@ Built on [Mate](https://github.com/FedeLoch/Mate) (object graph grammars),
 [Shin](https://github.com/FedeLoch/Shin) (input minimization).
 
 <p align="center">
-  <img src="images/flow.svg" alt="examples, Mate, Ume, Shin, tests" width="680"/>
+  <img src="images/flow.svg" alt="Object instances, Mate, Ume, Shin, Reproducible tests" width="820"/>
 </p>
 
 ## Install
