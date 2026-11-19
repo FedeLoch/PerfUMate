@@ -1,17 +1,17 @@
-# PerfUMate — Design
+# PerfUMate design
 
-PerfUMate is one small API for finding bugs and performance problems in Pharo code from a
-handful of example objects. It owns no search algorithm: it wires together
+PerfUMate is a small API to look for bugs and performance problems in Pharo code starting
+from a few example objects. It has no search algorithm of its own. It connects:
 
-- **Mate**: object-graph grammars (inference from examples, MCTS generation, derivation
-  mutation, `validity` to break exactly one rule),
-- **Ume**: the guided campaign (runner, corpus, guides, MOpt mutator scheduling, time budget),
-- **Shin**: input minimization (delta debugging with behavior-preserving oracles),
+- Mate: object graph grammars (inference from examples, MCTS generation, derivation
+  mutation, `validity` to break one rule),
+- Ume: the guided campaign (runner, corpus, guides, MOpt scheduling of mutators, time budget),
+- Shin: input minimization (delta debugging with an oracle that preserves the behavior).
 
-and adds only what is missing between them (a few mutators, a graph walker for Shin, the
-report). Anything that belongs upstream is listed in [Proposed upstream changes](#proposed-upstream-changes).
+PerfUMate only adds what is missing between them: a few mutators, a graph walker so Shin can
+reduce object graphs, and the report. Things that should move upstream are listed in section 6.
 
-## 1. The API
+## 1. API
 
 ```smalltalk
 report := PerfUMate new
@@ -21,240 +21,226 @@ report := PerfUMate new
     budget: 5 minutes;
     run.
 
-report open.          "findings, each minimized, with a reproducing SUnit test"
+report open.
 ```
 
-Five calls is the whole contract. Everything else has a default and is optional:
+These five calls are enough. The rest is optional:
 
-| Optional call | Default | Purpose |
+| Call | Default | Purpose |
 | --- | --- | --- |
-| `grammar` | inferred + widened | See the grammar before running (`perfumate grammar mateDefinition`). |
-| `grammar:` | — | Replace it: a `MateOGGrammar` or Mate source text. This is how the user tightens an overfitted grammar. |
-| `widen:` | `true` | Turn off widening of the inferred grammar. |
-| `validity:` | `0.9` | Share of generated graphs that satisfy every rule. |
-| `slowdown:` | `5` | A slow input must be at least N× slower than the median input. |
-| `instrument:` | derived from the target | Packages (names) whose coverage guides `#errors`. |
-| `seed:` | random | Reproducible generation (Mate's single random source). |
+| `grammar` | inferred and widened | see the grammar before running (`grammar mateDefinition`) |
+| `grammar:` | | replace it, with a `MateOGGrammar` or Mate source text (to tighten it) |
+| `widen:` | `true` | turn off widening |
+| `validity:` | `0.9` | share of generated graphs that respect every rule |
+| `slowdown:` | `5` | a slow input must be at least this many times slower than the median |
+| `instrument:` | from the target | packages whose coverage guides `#errors` |
+| `seed:` | random | reproducible generation |
+| `timeout:` | `2 seconds` | runs are stopped after this; a timeout counts as a slow input |
 
 Results:
 
 ```smalltalk
-report findings.             "PerfUMateFinding: kind, input, minimized, brokenRule, slowdown, error"
-report slowInputs.  report errors.
-report grammar.              "the grammar the campaign used"
-report campaign.             "the underlying UmeResult, for plots and CSV export"
-report testSource.           "source of an SUnit class reproducing every finding"
-report generateTestsIn: #CheckoutFuzzTest package: 'MyShop-Tests'.   "compile it"
-report open.
+report findings.        "PerfUMateFinding: kind, original, minimized, brokenRule, slowdown, signature"
+report slowInputs.
+report errors.
+report grammar.         "the grammar used by the campaign"
+report campaign.        "the UmeResult (plots, CSV export)"
+report testSource.      "methods of an SUnit class reproducing every finding"
+report generateTestsIn: #CheckoutFuzzTest package: 'MyShop-Tests'.
 ```
 
-The report is the user's object. `generateTestsIn:package:` is the bridge to CI: the
-minimized findings become ordinary SUnit tests that are committed and run by the project's
-regular test job (see [§7](#7-nightly-ci-next-step)).
+`generateTestsIn:package:` is what connects PerfUMate with CI: the minimized findings become
+plain SUnit tests, committed with the project and run by its usual test job (section 7).
 
-## 2. What each call maps to
+## 2. Mapping to Ume, Mate and Shin
 
 | PerfUMate | Ume / Mate / Shin |
 | --- | --- |
-| `examples:` | `MateOGGrammar inferFrom: examples` (`MateGrammarInferrer`), then `PerfUMateGrammarWidener`. Root type = class of the first example. |
-| `grammar:` text | `MateOGGrammar new addTypeDeclarations: (MateLanguageParser parse: text)` |
-| `target:` | A `PerfUMateTarget` wraps the block; the Ume schema calls `PerfUMateTarget >> #runOn:`. `receiver:selector:` builds the block. |
-| `run` | `UmeSchema` (receiver = the target, one argument = a `UmeCorpusGenerator`) + `UmeRunner test:for:` with `UmeTimeCriteria`. |
-| corpus | `UmeCorpusGenerator` seeded with the examples, `mutatorSelector: UmeMOPTMutatorSelector new`, `mutationsPerIteration: 1..3`. |
-| `lookFor: #slowInputs` | `runner guidedByExecutionTime`, only the target instrumented (low cost). |
-| `lookFor: #errors` | `PerfUMateCoverageAndErrorsGuide` (coverage table + error table in one guide), execution-time profiling, coverage over `instrument:` packages. |
-| `lookFor: aGuide` | Any `UmeFeedbackGuide` instance, installed in the runner's `UmeFeedbackEvaluator`. |
-| confirmation | PerfUMate re-runs candidates on their own (`PerfUMateTarget >> timeOn:`). |
-| minimization | `PerfUMateGraphShrinker` walks the graph and calls Shin's `ShinDDminPaperShrinker` with a `ShinBooleanInputOracle` on each collection and string. |
-| broken rule | `MateDerivationNode violations` when the graph was generated with `validity`, else the message of `grammar parse:` on the minimized graph. |
-| test | STON of the minimized input, like `UmeTest >> installUnitTestIn:`. |
+| `examples:` | `MateOGGrammar inferFrom: examples` (`MateGrammarInferrer`), then `PerfUMateGrammarWidener`. The root type is the class of the first example. |
+| `grammar:` with text | `MateOGGrammar new addTypeDeclarations: (MateLanguageParser parse: text)` |
+| `target:` | a `PerfUMateTarget` wraps the block; the Ume schema calls `PerfUMateTarget >> #runOn:`. `receiver:selector:` builds the block. |
+| `run` | `UmeSchema` (receiver: the target, one argument: a `UmeCorpusGenerator`) and `UmeRunner test:for:` |
+| corpus | `UmeCorpusGenerator` seeded with the examples, `UmeMOPTMutatorSelector`, 2 mutations per iteration |
+| `#slowInputs` | `runner guidedByExecutionTime`, only the target instrumented |
+| `#errors` | `PerfUMateCoverageAndErrorsGuide` (covered nodes and error messages in one table), coverage over the `instrument:` packages |
+| a guide | any `UmeFeedbackGuide`, installed in the runner's `UmeFeedbackEvaluator` |
+| confirmation | `PerfUMateTarget >> medianMicrosecondsOn:runs:` and `errorSignatureOn:` |
+| minimization | `PerfUMateGraphShrinker`: walks the graph and runs Shin's `ShinDDminPaperShrinker` with a `ShinBooleanInputOracle` on each collection and string |
+| broken rule | message of `grammar parse:` on the minimized graph |
+| tests | STON of the minimized input, as in `UmeTest >> installUnitTestIn:` |
 
-## 3. Defaults and why
+## 3. Defaults
 
-They come from the measurements made with Termo (the Node/TypeScript port of the same
-architecture, `Termo/bench/mate`), where Mate-based fuzzing was compared with byte-level
-fuzzing on ~40 real parsers and libraries.
+They come from the Termo experiments (the Node/TypeScript port, `Termo/bench/mate`), where
+Mate based fuzzing was compared with byte level fuzzing on about 40 parsers and libraries.
 
-### 3.1 Grammar: infer, then widen, then let the user tighten
+### 3.1 Inferred grammar, widened
 
-Three examples overfit: inferred ranges are the observed min..max, collections are the
-observed sizes, enumerations are the observed values. PerfUMate widens the inferred grammar
-(`PerfUMateGrammarWidener`):
+Three examples overfit: ranges are the observed min and max, collections have the observed
+sizes. `PerfUMateGrammarWidener` changes the inferred grammar in place:
 
-- numeric `between:and:` ranges grow by 10× their span on each side, **without crossing
-  zero** when the examples never did (going below zero is the job of rule breaking, so it
-  stays a deliberate 10%, and the report can say "broke `quantity > 0`");
-- collection sizes become `minSize .. max(4 × maxSize, 16)`;
-- invariants and `selfReferences` are kept (they are structure, not range).
+- a numeric range grows by 10 times its span on each side, without crossing zero if the
+  examples did not (negative values come from rule breaking, so they stay at 10% and the report
+  can name the broken rule);
+- collection sizes go up to `max(4 * maxSize, 16)`;
+- invariants and references are kept.
 
-`perfumate grammar mateDefinition` prints the result; `grammar:` with edited text replaces it.
+The user can print `grammar mateDefinition`, edit it and pass it back with `grammar:`.
 
-### 3.2 Generation with validity 0.9
+### 3.2 Validity 0.9
 
-New graphs come from Mate's generator (MCTS over the grammar, rewarded by Ume's feedback).
-90% of them satisfy every rule; 10% break exactly one (`MateViolationInjector`: range, oneOf,
-type, nil, size, element, reference, invariant). Code is usually robust to random garbage and
-fragile right next to its assumptions.
+New graphs come from Mate's generator (MCTS, rewarded with Ume's feedback). 90% of them
+respect every rule and 10% break exactly one (`MateViolationInjector`: range, oneOf, type, nil,
+size, element, reference, invariant). Code tends to resist random garbage and to fail right
+next to its assumptions.
 
-### 3.3 Mutators, scheduled by MOpt
+### 3.3 Mutators chosen by MOpt
 
-`UmeMOPTMutatorSelector` chooses among:
-
-| Mutator | What it does | Why |
+| Mutator | Change | Reason |
 | --- | --- | --- |
-| `PerfUMateGenerateMutator` | a fresh graph, validity 0.9 | keeps exploring away from the corpus |
-| `PerfUMateDerivationMutator leastRewarded` | regenerate the least rewarded node | Ume's derivation mutation (`UmeOGGrammarDerivationMutator`) |
+| `PerfUMateGenerateMutator` | new graph, validity 0.9 | exploration away from the corpus |
+| `PerfUMateDerivationMutator leastRewarded` | regenerate the least rewarded node | as `UmeOGGrammarDerivationMutator` |
 | `PerfUMateDerivationMutator random` | regenerate a random node | diversity |
-| `PerfUMateDerivationMutator breakingRule` | regenerate a node with validity 0 | "almost valid" objects |
-| `PerfUMateRepeatMutator` | copy a run of 1–4 collection elements 2–64 times | structural slowness |
-| `PerfUMatePrimitiveMutator` | edit one string (truncate, cut, insert, flip a character) or one number (boundary values) inside the graph | byte-level bugs |
+| `PerfUMateDerivationMutator breakingRule` | make the graph break one rule | almost valid objects |
+| `PerfUMateRepeatMutator` | insert 2 to 64 copies of a run of 1 to 4 collection elements | structural slowness |
+| `PerfUMatePrimitiveMutator` | change one string (cut, insert, replace a character) or one number (boundaries) | byte level bugs |
 
-**Repeat was decisive for performance bugs.** In Termo, cmark, cmark-gfm and sqlparse
-slowdowns were found 4–10× faster with it: super-linear behavior needs *many* copies of one
-construct, and derivation mutation changes one node at a time within the declared sizes.
-Neither Ume nor Mate had it, so it lives here (and is proposed upstream).
+The repeat mutator made the biggest difference for performance bugs in Termo: the slowdowns of
+cmark, cmark-gfm and sqlparse were found 4 to 10 times faster with it. Super-linear behavior
+needs many copies of the same construct, and derivation mutation changes one node at a time
+within the declared sizes. Neither Ume nor Mate had such a mutator, so it is here for now.
 
-### 3.4 Guide by intent
+### 3.4 Guides
 
-- `#slowInputs` → execution time (Ume's `UmeExecutionTimeGuide`, log buckets, so noise is not
-  rewarded). Only the target is instrumented, keeping the per-input cost low.
-- `#errors` → coverage and errors at once: a new error message *or* new coverage is progress.
-  Ume has one guide per runner, so PerfUMate adds `PerfUMateCoverageAndErrorsGuide`.
+- `#slowInputs`: execution time (`UmeExecutionTimeGuide`, log buckets so noise is not
+  rewarded). Only the target is instrumented to keep each run cheap.
+- `#errors`: coverage and errors together. A new covered node or a new error message is
+  progress. A Ume runner has a single guide, hence `PerfUMateCoverageAndErrorsGuide`.
 
-Errors found while looking for slow inputs (and vice versa) are reported too: they are free.
+Errors found while looking for slow inputs are reported as well.
 
-### 3.5 Confirm before reporting
+### 3.5 Confirmation
 
-Timing during the campaign is noisy (instrumentation, GC, other cases). A slow candidate is
-re-timed alone: GC, then the median of 5 runs, against the median of the examples plus 20
-fresh valid graphs (the baseline). It is reported only if the ratio is at least `slowdown`.
-An error is re-run too and must raise the same error class at the same method.
+Times measured during the campaign are noisy. The baseline is the median time of the examples
+and of up to 20 new valid graphs. Slow candidates (the last records of the campaign) are re-timed
+alone, median of 3 runs, and the two slowest are kept: the records of a campaign are usually the
+same problem growing, and minimizing all of them splits the time between copies. A finding
+needs a median of 5 runs at least `slowdown` times the baseline. Errors are run again and must
+give the same signature: exception class and first method of the code under test on the stack
+(not `Object>>errorSubscriptBounds:`).
 
-### 3.6 Minimize with Shin, preserving the behavior
+### 3.6 Minimization
 
-Each confirmed finding is minimized by `PerfUMateGraphShrinker`:
+`PerfUMateGraphShrinker` repeats, until nothing changes or the deadline passes:
 
-1. walk the graph breadth-first (identity set, so cycles terminate);
-2. for every collection: Shin's ddmin over its elements;
-3. for every string: Shin's ddmin over its characters;
-4. for every number: try 0, 1, -1, then halve toward 0;
-5. repeat until nothing shrinks or the deadline passes.
+1. walk the graph breadth first (by identity, cycles are fine);
+2. reduce each collection with Shin's ddmin over its elements (empty first);
+3. reduce each string with ddmin over its characters;
+4. replace each number by 0, then 1 or -1, then halves toward 0.
 
-The oracle is the behavior, not the size:
+The oracle checks the behavior:
 
-- error: same exception class, same signaling method;
-- slow: still at least `slowdown`× slower than the baseline median (median of 3 runs);
-- and if the original graph satisfied the grammar, the candidate must too, so minimization
-  does not introduce a second broken rule.
+- errors: same signature;
+- slow inputs: still at least 2 x `slowdown` times the baseline (median of 3 runs), so the
+  result does not sit on the threshold where noise decides. If the minimized input is not slow
+  when measured again (median of 5), the original input is reported;
+- if the original graph respected the grammar, the candidate must too, so minimization does
+  not add a broken rule.
 
-Each candidate runs on a `veryDeepCopy`, so a target that mutates its argument cannot corrupt
-the shrinker's state.
-
-The report shows the minimized input (STON), the broken rule if any, the slowdown ratio,
-the error and its location, and a generated SUnit test method.
+Candidates run on a `veryDeepCopy`, so a target that modifies its argument does not affect
+the shrinker.
 
 ### 3.7 Budget
 
-`budget:` is the whole wall-clock time. The campaign gets 80% of it; confirmation and
-minimization share the rest, each finding with its own deadline. A finding whose
-minimization ran out of time is still reported, with `isMinimized` false.
+`budget:` is the total time. The campaign gets 80% of it (minus the baseline, at most 10%),
+confirmation and minimization share the rest, with one deadline per finding. A finding whose
+minimization did not finish is still reported, marked as not fully minimized.
 
-## 4. Known pitfalls (from Termo)
+## 4. Pitfalls seen in Termo
 
-- **Re-validating the whole graph on every mutation.** Ume's `UmeOGGrammarDerivationMutator`
-  calls `grammar parse:` on a `veryDeepCopy` for every mutation; in Termo, Mate mutation ran
-  10–100× fewer inputs per second than byte mutation for that reason. PerfUMate keeps the
-  derivation tree next to the object: every input is a `PerfUMateInput` (graph + key) and a
-  `PerfUMateDerivationCache` maps the key to the derivation that built it. Stacked mutations
-  reuse the same tree without parsing; `grammar parse:` runs only on a cache miss (examples,
-  and inputs the repeat/primitive mutators changed). The graph handed to the target is a
-  snapshot, never the derivation's own instance, so a target that mutates its argument
-  cannot desynchronize the tree.
-- **Mate alone misses "almost valid" bugs** (a truncated string inside a field, a number one
-  past a boundary). Derivation mutation regenerates whole values; it rarely produces
-  `'VI'` from `'VIP10'`. Hence `PerfUMatePrimitiveMutator`, scheduled by MOpt like the others.
-- **Mate is slow per input.** Generation and derivation mutation cost far more than flipping a
-  byte. Bound graph sizes (widened, not unbounded), cap the repeat mutator at 4096 elements per
-  collection, and keep `mutationsPerIteration` small (1–3).
-- **Invalid graphs cannot be parsed.** Inputs from the repeat mutator break size rules on
-  purpose; Mate's parser rejects them, so derivation mutators fall back to the primitive and
-  repeat mutators for those inputs (see the proposed `checkSizes:` below).
-- **Timing is noisy.** Guide with log buckets, confirm alone, compare medians.
+- Re-validating the whole graph at each mutation. `UmeOGGrammarDerivationMutator` calls
+  `grammar parse:` on a `veryDeepCopy` for every mutation. In Termo this made Mate mutation run
+  10 to 100 times fewer inputs per second than byte mutation. Here every input is a
+  `PerfUMateInput` (graph and key) and `PerfUMateSearchSpace` maps the key to the derivation
+  that built it. Chained mutations reuse the tree; `grammar parse:` only runs when the key is
+  unknown (examples, inputs changed by the repeat or primitive mutators). The target gets a copy
+  of the graph, never the derivation's own instance.
+- Mate alone misses almost valid inputs (a truncated string in a field, a number one past a
+  bound). Derivation mutation regenerates whole values and rarely turns `'VIP10'` into `'VI'`.
+  `PerfUMatePrimitiveMutator` covers that.
+- Mate is slow per input. Sizes stay bounded (widened, not open), the repeat mutator stops at
+  1024 elements per collection, and there are 2 mutations per iteration.
+- Invalid graphs cannot be parsed. Inputs grown by the repeat mutator break size rules, so only
+  the repeat and primitive mutators apply to them (see `checkSizes:` below).
+- Timing is noisy: log buckets during the search, medians and runs in isolation afterwards.
+- Pharo 13 has no `Time microsecondsToRun:`; `PerfUMateTarget class >> microsecondsToRun:`
+  uses `Time microsecondClockValue`.
 
-## 5. Package layout
+## 5. Packages
 
 ```
-BaselineOfPerfUMate/        loads Ume, Mate, Shin from GitHub
+BaselineOfPerfUMate/   Ume, Mate and Shin from GitHub
 PerfUMate/
-  PerfUMate                 the facade (builder + run)
-  PerfUMateTarget           block wrapper the Ume schema calls
-  PerfUMateInput            graph + derivation key (what the corpus holds)
-  PerfUMateDerivationCache  key -> Mate derivation
+  PerfUMate                     configuration and run
+  PerfUMateCampaign             baseline, Ume campaign, confirmation, minimization
+  PerfUMateTarget               code under test: runs, timing, timeouts, errors
+  PerfUMateInput                graph and derivation key (what the corpus holds)
+  PerfUMateSearchSpace          grammar, validity, derivation cache
+  PerfUMateErrorSignature, PerfUMateTimeout
   PerfUMateGrammarWidener
-  PerfUMateGenerateMutator, PerfUMateDerivationMutator,
-  PerfUMateRepeatMutator, PerfUMatePrimitiveMutator   (UmeMutator subclasses)
-  PerfUMateGraphWalker      slots of a graph (collections, strings, numbers)
-  PerfUMateCoverageAndErrorsGuide   (UmeFeedbackGuide subclass)
-  PerfUMateGraphShrinker    drives Shin per slot
-  PerfUMateFinding, PerfUMateReport
+  PerfUMateMutator and subclasses (generate, derivation, repeat, primitive)
+  PerfUMateGraphWalker, PerfUMateSlot
+  PerfUMateCoverageAndErrorsGuide
+  PerfUMateGraphShrinker
+  PerfUMateFinding, PerfUMateReport, PerfUMateGeneratedTest
 PerfUMate-Tests/
-  PerfUMateExampleOrder/Item/Checkout   a tiny domain with one slow path and one crash
-  PerfUMateTest              the whole flow: one slow-input case, one error case
-  PerfUMateMutatorsTest, PerfUMateGrammarWidenerTest, PerfUMateGraphShrinkerTest
+  PerfUMateExampleOrder, Item, Checkout, PerfUMateExamples   small domain, one slow path, one crash
+  PerfUMateTest        whole flow: slow inputs, errors
+  PerfUMatePartsTest   mutators, walker, shrinker, widener, timeouts, derivation cache
 ```
 
 ## 6. Proposed upstream changes
 
-PerfUMate works around these today; each would let it delete code.
+PerfUMate works around these for now.
 
-**Mate**
+Mate
 1. Merge `confidence-generation` into `main`. `validity` (`gen:from:validity:violating:`,
-   `MateViolationInjector`, `violations` on derivations) exists only on that branch.
-   PerfUMate detects it with `respondsTo:` and falls back to validity 1 without it; the
-   baseline loads Mate `main` because Ume's baseline does too.
-2. `parse: object checkSizes: false` (as in Termo): validate a graph ignoring collection
-   sizes, so inputs grown by the repeat mutator can still be derivation-mutated.
-3. A public way to copy a derivation subtree without copying the grammar, so a corpus entry's
-   tree can be mutated without being consumed (today the cache hands a tree to one child).
-4. A repeat operation on `MateInstArrayVarDecl` nodes (duplicate a run of children), the
-   derivation-level version of `PerfUMateRepeatMutator`.
+   `MateViolationInjector`, `violations`) is only on that branch. PerfUMate checks with
+   `respondsTo:` and uses validity 1 without it. The baseline loads Mate `main`, as Ume does.
+2. `parse: object checkSizes: false` (as in Termo), so graphs grown by the repeat mutator can
+   still be mutated by derivation.
+3. Copying a derivation subtree without copying the grammar, so a corpus entry can be mutated
+   several times without re-parsing (today a cached tree is used by one child only).
+4. A repeat operation on `MateInstArrayVarDecl` nodes.
 
-**Ume**
-1. `UmeFeedbackEvaluator >> guide:` and `UmeRunner >> guidedBy: aGuide`, so custom guides do
-   not need `instVarNamed:`.
-2. A composite guide (`UmeCompositeGuide with: { coverage. errors }`).
-3. Keep the error class and the signaling method in `UmeEvalError` (today: message and a
-   10-frame stack), so grouping does not need a re-run.
-4. `UmeOGGrammarDerivationMutator`: keep the derivation with the case instead of
-   `grammar parse: objectGraph veryDeepCopy` on every mutation.
-5. A repeat mutator and a primitive (in-graph string/number) mutator for object graphs.
-6. A `PerfUMate`-style entry point for running all campaigns of a package headless (see §7).
+Ume
+1. `UmeFeedbackEvaluator >> guide:` and `UmeRunner >> guidedBy:` (today: `instVarNamed:`).
+2. A composite guide.
+3. Error class and signaling method in `UmeEvalError` (today: message and 10 frames), so
+   grouping errors does not need a re-run.
+4. `UmeOGGrammarDerivationMutator` keeping the derivation with the case.
+5. Repeat and primitive mutators for object graphs.
+6. Running all campaigns of a package headless (section 7).
 
-**Shin**
-1. An object-graph shrinker (`ShinObjectGraphShrinker`): today Shin's flat shrinkers work
-   on sequences and its tree shrinkers on parsed strings; PerfUMate's walker is the glue.
-2. `ShinExecutionTimeOracle` runs once (`1 timesCollect:`); a median of N runs would make it
-   usable directly for slow-input minimization.
+Shin
+1. An object graph shrinker, so PerfUMate's walker is not needed.
+2. `ShinExecutionTimeOracle` measures one run (`1 timesCollect:`); a median would make it
+   usable for slow inputs.
 
-## 7. Nightly CI (next step)
+## 7. Nightly CI (next)
 
-The goal: small fuzzing campaigns running every night on several Pharo projects, turning
-findings into tests. The pieces already designed for it:
+Goal: short campaigns every night on several Pharo projects, with findings turned into tests.
+Already there: `generateTestsIn:package:` and `testSource` (inputs as STON, the target as code
+when the block does not use its context), and a report without UI dependencies except `open`.
 
-- `report generateTestsIn:package:` and `report testSource` give a self-contained SUnit
-  class (inputs as STON, the target as code when it is a clean block or a receiver/selector).
-- The report has no UI dependency except `open`.
+To do:
 
-What remains (not implemented yet):
-
-1. **Declared campaigns.** Class-side methods tagged `<perfumate>` that answer a configured
-   `PerfUMate` (no `budget:`), so a project lists its campaigns in code.
-2. **Headless runner.** `PerfUMate runCampaignsIn: 'MyShop' budget: 10 minutes into: 'perfumate-out'`
-   splits the budget, runs each campaign, writes `report.md` (findings, slowdowns, broken
-   rules) and the generated test classes in Tonel, and exits non-zero on new findings.
-3. **GitHub Action.** A scheduled workflow (`on: schedule: - cron: '0 3 * * *'`) using
-   `hpi-swa/setup-smalltalkCI`, loading the project and PerfUMate, running the headless
-   runner, uploading `perfumate-out` as an artifact and, on new findings, opening a pull
-   request with the generated tests (or an issue with `report.md`).
-4. **Deduplication across nights.** Findings keyed by (kind, error class, method) so a known
-   bug does not reopen every night; the committed generated tests are the record.
+1. Campaigns declared in code: class side methods with a `<perfumate>` pragma answering a
+   configured `PerfUMate`.
+2. A headless entry point, e.g. `PerfUMate runCampaignsIn: 'MyShop' budget: 10 minutes into: 'perfumate-out'`,
+   writing a markdown summary and the generated test classes in Tonel, and exiting with an
+   error on new findings.
+3. A scheduled GitHub workflow (`cron: '0 3 * * *'`) with `hpi-swa/setup-smalltalkCI`: load the
+   project and PerfUMate, run the entry point, upload `perfumate-out`, and open a pull request
+   with the generated tests (or an issue with the summary).
+4. Findings keyed by kind, error class and method, so a known bug is not reported every night.

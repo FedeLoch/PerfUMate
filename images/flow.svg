@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="200" viewBox="0 0 880 200" role="img" aria-label="Examples, Mate grammar, Ume campaign, Shin minimization, report and tests">
+  <style>
+    .card { fill: #ffffff; stroke: #d9d6f5; stroke-width: 1.5; }
+    .t { font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; fill: #24223a; }
+    .h { font-size: 17px; font-weight: 700; }
+    .s { font-size: 12.5px; fill: #5d5a78; }
+    .tag { font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+    .arrow { stroke: #b3add9; stroke-width: 2; fill: none; marker-end: url(#a); }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#b3add9"/>
+    </marker>
+  </defs>
+  <rect width="880" height="200" rx="18" fill="#f6f5ff"/>
+
+  <g transform="translate(24 40)">
+    <rect class="card" width="150" height="120" rx="14"/>
+    <text class="t tag" x="16" y="28" fill="#8a84b8">YOU</text>
+    <text class="t h" x="16" y="56">Examples</text>
+    <text class="t s" x="16" y="80">3 objects, a target,</text>
+    <text class="t s" x="16" y="98">an intent, a budget</text>
+  </g>
+  <path class="arrow" d="M178 100 H204"/>
+
+  <g transform="translate(208 40)">
+    <rect class="card" width="150" height="120" rx="14"/>
+    <text class="t tag" x="16" y="28" fill="#6d5dfc">MATE</text>
+    <text class="t h" x="16" y="56">Grammar</text>
+    <text class="t s" x="16" y="80">inferred, widened,</text>
+    <text class="t s" x="16" y="98">10% break one rule</text>
+  </g>
+  <path class="arrow" d="M362 100 H388"/>
+
+  <g transform="translate(392 40)">
+    <rect class="card" width="150" height="120" rx="14"/>
+    <text class="t tag" x="16" y="28" fill="#2f9e8f">UME</text>
+    <text class="t h" x="16" y="56">Campaign</text>
+    <text class="t s" x="16" y="80">guided search, MOpt</text>
+    <text class="t s" x="16" y="98">picks the mutators</text>
+  </g>
+  <path class="arrow" d="M546 100 H572"/>
+
+  <g transform="translate(576 40)">
+    <rect class="card" width="130" height="120" rx="14"/>
+    <text class="t tag" x="16" y="28" fill="#e08a1e">SHIN</text>
+    <text class="t h" x="16" y="56">Minimize</text>
+    <text class="t s" x="16" y="80">same bug,</text>
+    <text class="t s" x="16" y="98">smallest input</text>
+  </g>
+  <path class="arrow" d="M710 100 H736"/>
+
+  <g transform="translate(740 40)">
+    <rect width="116" height="120" rx="14" fill="#6d5dfc"/>
+    <text class="t tag" x="16" y="28" fill="#d9d4ff">YOU GET</text>
+    <text class="t h" x="16" y="56" fill="#ffffff">Report</text>
+    <text class="t s" x="16" y="80" fill="#e9e6ff">+ SUnit tests</text>
+    <text class="t s" x="16" y="98" fill="#e9e6ff">for your CI</text>
+  </g>
+</svg>

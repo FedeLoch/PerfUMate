@@ -32,6 +32,15 @@ PerfUMateTarget class >> median: numbers [
 	^ sorted at: sorted size + 1 // 2
 ]
 
+{ #category : 'statistics' }
+PerfUMateTarget class >> microsecondsToRun: aBlock [
+
+	| start |
+	start := Time microsecondClockValue.
+	aBlock value.
+	^ Time microsecondClockValue - start
+]
+
 { #category : 'instance creation' }
 PerfUMateTarget class >> receiver: anObject selector: aSelector [
 
@@ -111,7 +120,7 @@ PerfUMateTarget >> microsecondsOn: aGraph [
 	first := self singleRunMicrosecondsOn: aGraph.
 	(first isNil or: [ first >= 100 ]) ifTrue: [ ^ first ].
 	copies := (1 to: 20) collect: [ :i | aGraph veryDeepCopy ].
-	total := [ Time microsecondsToRun: [ copies do: [ :each | self valueWith: each ] ] ]
+	total := [ self class microsecondsToRun: [ copies do: [ :each | self valueWith: each ] ] ]
 		         on: Error
 		         do: [ :error | error return: nil ].
 	total ifNil: [ ^ first ].
@@ -144,7 +153,7 @@ PerfUMateTarget >> singleRunMicrosecondsOn: aGraph [
 
 	| copy |
 	copy := aGraph veryDeepCopy.
-	^ [ Time microsecondsToRun: [ self valueWith: copy ] ]
+	^ [ self class microsecondsToRun: [ self valueWith: copy ] ]
 		  on: Error
 		  do: [ :error |
 			  error return: ((error isKindOf: PerfUMateTimeout)

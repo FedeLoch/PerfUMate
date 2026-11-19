@@ -30,5 +30,4 @@ SqueakDebug.log
 /github-cache
 github-*.zip
 
-# Claude Code
 .claude/
