@@ -7,11 +7,9 @@
 
 Performance fuzzing for Pharo, from a few example objects.
 
-PerfUMate looks for the inputs that make your code slow. You give it some example objects and
-a benchmark (the code to run on each input). It infers what valid inputs look like, searches
-for the ones that take the longest, reduces each one to a small input that is still slow, and
-generates an SUnit test for it. Crashes found on the way are reported too, and
-`lookFor: #errors` hunts for crashes and other bugs instead.
+Give PerfUMate a few example objects and a benchmark. It finds the inputs that make your code
+slow, shrinks each one, and hands you an SUnit test that reproduces it. Use `lookFor: #errors`
+to hunt crashes instead.
 
 Built on [Mate](https://github.com/FedeLoch/Mate) (object graph grammars),
 [Ume](https://github.com/FedeLoch/Ume) (guided fuzzing) and
