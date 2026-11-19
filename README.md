@@ -22,39 +22,114 @@ Metacello new
     load.
 ```
 
-## Use
+## Example
+
+This example ships with the tests (`PerfUMate-Tests`), so you can run it as is. A small checkout
+processes orders: it sums the items, applies a coupon and computes loyalty points.
 
 ```smalltalk
-report := PerfUMate new
-    examples: { order1. order2. order3 };
-    target: [ :order | Checkout new process: order ];
-    lookFor: #slowInputs;          "the default; #errors for any kind of bug"
-    budget: 5 minutes;
-    run.
+PerfUMateExampleCheckout >> process: anOrder [
+    | total |
+    total := anOrder items inject: 0 into: [ :sum :item | sum + (item quantity * item price) ].
+    ^ { total - (self discountFor: anOrder). self loyaltyPointsFor: anOrder }
+]
 
+PerfUMateExampleCheckout >> loyaltyPointsFor: anOrder [
+    "For every item, count the items with the same name"
+    ^ anOrder items inject: 0 into: [ :points :item |
+        points + (anOrder items count: [ :other | other name = item name ]) ]
+]
+
+PerfUMateExampleCheckout >> discountFor: anOrder [
+    ^ (anOrder coupon first: 3) = 'VIP' ifTrue: [ 10 ] ifFalse: [ 0 ]
+]
+```
+
+With the three example orders of the tests (one to three items, coupons `'VIP10'`, `'SPRING'`
+and `'WELCOME5'`) nothing looks wrong. A one minute campaign:
+
+```smalltalk
+perfumate := PerfUMate new
+    examples: PerfUMateExamples orders;
+    target: [ :order | PerfUMateExampleCheckout new process: order ];
+    lookFor: #slowInputs;
+    budget: 1 minute;
+    slowdown: 10;
+    timeout: 1 second;
+    seed: 7;
+    yourself.
+
+perfumate grammar mateDefinition.   "optional: check what was inferred before running"
+report := perfumate run.
 report open.
 ```
 
-```smalltalk
-report findings.
-"9.7x slower than the median input (61 us vs 6 us) - breaks: Array size 33 not between 0 and 16"
-"SubscriptOutOfBounds in Checkout>>#discountFor:: 1 in ''"
+The grammar inferred from the examples, with collection sizes widened to 16:
 
-report generateTestsIn: #CheckoutFuzzTest package: 'MyShop-Tests'.
+```
+PerfUMateExampleItem -> {
+    name: ByteString,
+    quantity: { type: SmallInteger, atLeast: 1 },
+    price: { type: SmallInteger, atLeast: 1 }
+}
+
+PerfUMateExampleOrder -> {
+    items: { type: [ PerfUMateExampleItem ], collection: OrderedCollection, sizeBetween: 0 and: 16 },
+    coupon: ByteString
+}
 ```
 
-The generated tests fail while the problem is there and pass once it is fixed.
+The report:
+
+```
+PerfUMate: 2 slow input(s), 1 error(s) in 0:00:01:00
+16.8x slower than the median input (124 us vs 7 us) - breaks: Array size 70 not between 0 and 16
+12.5x slower than the median input (92 us vs 7 us) - breaks: Array size 59 not between 0 and 16
+SubscriptOutOfBounds in PerfUMateExampleCheckout>>#discountFor:: 1 in ''
+```
+
+The slow inputs are orders with 59 and 70 items, mostly with the same name: `loyaltyPointsFor:`
+is quadratic in the number of items. The broken rule says why the examples did not show it, as
+they never had more than 3 items. The error was found on the way: the minimized order has no
+items and an empty coupon, and `first: 3` fails on coupons shorter than 3 characters.
+
+`report generateTestsIn: #CheckoutFuzzTest package: 'MyShop-Tests'` turns the findings into
+tests (inputs shortened here):
+
+```smalltalk
+testPerfUMate01Error
+    "PerfUMate: SubscriptOutOfBounds in PerfUMateExampleCheckout>>#discountFor:: 1 in ''"
+    self assertNoErrorOn: (STON fromString: 'PerfUMateExampleOrder{#items:OrderedCollection[],#coupon:''''}')
+
+testPerfUMate02SlowInput
+    "PerfUMate: 16.8x slower than the median input (124 us vs 7 us)"
+    self
+        assertInput: (STON fromString: 'PerfUMateExampleOrder{#items:OrderedCollection[...70 items...]}')
+        isAtMost: 10
+        timesSlowerThan: self perfumateReferenceInput
+```
+
+They fail while the problems are there and pass once they are fixed. The slow input test times
+the input against one of the examples in the same run, so it does not depend on the machine.
 
 ## Options
 
-| | Default | |
+`examples:`, `target:` and `budget:` are the ones you normally set; everything else has a default.
+
+| Option | Default | What it does |
 | --- | --- | --- |
-| `grammar` / `grammar:` | inferred | print the inferred grammar, edit it, pass it back |
-| `receiver:selector:` | | instead of a block |
-| `validity:` | `0.9` | share of inputs that respect every rule |
-| `slowdown:` | `5` | how much slower than the median counts as slow |
-| `timeout:` | `2 seconds` | longer runs are stopped and count as slow |
-| `seed:` | | reproducible campaigns |
+| `examples:` | | Example inputs. Mate infers a grammar from them (types, ranges, collection sizes), and the search starts from them. |
+| `target:` | | A one argument block that runs the code under test on an input. |
+| `receiver:selector:` | | Instead of `target:`, calls `receiver perform: selector with: input`. |
+| `lookFor:` | `#slowInputs` | `#slowInputs` guides the search by execution time. `#errors` guides it by coverage and new errors, for any kind of bug. A `UmeFeedbackGuide` gives your own measure. |
+| `budget:` | `1 minute` | Total time. 80% goes to the search, the rest to confirming and minimizing the findings. |
+| `slowdown:` | `5` | An input is reported as slow when it is at least this many times slower than the median input (examples and generated inputs, each timed alone). |
+| `timeout:` | `2 seconds` | Each run of the target is stopped after this. An input that times out counts as slow. |
+| `validity:` | `0.9` | Share of generated inputs that respect every rule of the grammar. The other 10% break exactly one rule, which is where code usually breaks. |
+| `grammar` / `grammar:` | inferred | `grammar` answers the inferred grammar (`mateDefinition` prints it). Edit the text and pass it back with `grammar:` to fix a rule the examples got wrong, or to add one. |
+| `widen:` | `true` | Inferred ranges and collection sizes are widened beyond the examples, since a few examples overfit. `false` keeps them as inferred. |
+| `instrument:` | from the target | Package names whose coverage guides `#errors`. |
+| `seed:` | random | Makes generation reproducible. |
 
 ## Built on
 
