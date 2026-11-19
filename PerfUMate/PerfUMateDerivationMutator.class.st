@@ -90,3 +90,11 @@ PerfUMateDerivationMutator >> replace: aNode in: aDerivation [
 	space grammar replace: aNode by: variant.
 	^ aDerivation
 ]
+
+{ #category : 'printing' }
+PerfUMateDerivationMutator >> label [
+
+	strategy = #leastRewarded ifTrue: [ ^ 'least rewarded node' ].
+	strategy = #random ifTrue: [ ^ 'random node' ].
+	^ 'break one rule'
+]

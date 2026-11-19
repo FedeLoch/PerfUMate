@@ -107,6 +107,32 @@ of items. The broken rule says why the examples did not show it, as they never h
 items. The two crashes were found on the way: coupons shorter than 3 characters, and orders
 without units.
 
+`report open` shows the findings in an inspector, with charts to understand the campaign:
+
+<p align="center">
+  <img src="images/report-findings.png" alt="Findings tab: errors and slow inputs with their minimized inputs" width="820"/>
+</p>
+
+**Campaign.** Every run of the search, and its time against the size of the input. The curve on
+the right is the complexity of the slow path: here, quadratic.
+
+<p align="center">
+  <img src="images/report-campaign.png" alt="Campaign tab: time of every run and time against input size" width="820"/>
+</p>
+
+<table>
+  <tr>
+    <td width="33%"><a href="images/report-bugs.png"><img src="images/report-bugs.png" alt="Bugs tab"/></a></td>
+    <td width="33%"><a href="images/report-mutators.png"><img src="images/report-mutators.png" alt="Mutators tab"/></a></td>
+    <td width="33%"><a href="images/report-grammar.png"><img src="images/report-grammar.png" alt="Grammar hits tab"/></a></td>
+  </tr>
+  <tr>
+    <td><b>Bugs</b>: errors hit during the search, and each finding before and after minimization.</td>
+    <td><b>Mutators</b>: runs and records per mutator, and what MOpt ended up preferring.</td>
+    <td><b>Grammar hits</b>: the most generated grammar points, and the rules the best inputs break.</td>
+  </tr>
+</table>
+
 ## Example: crashes and other bugs
 
 To hunt for bugs instead of slow inputs, look for errors. The search is then guided by coverage

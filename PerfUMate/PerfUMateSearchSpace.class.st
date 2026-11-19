@@ -18,7 +18,8 @@ Class {
 		'nextKey',
 		'maxCached',
 		'maxElements',
-		'lastFeedback'
+		'lastFeedback',
+		'trace'
 	],
 	#category : 'PerfUMate-Core',
 	#package : 'PerfUMate',
@@ -79,13 +80,21 @@ PerfUMateSearchSpace >> defaultMutators [
 
 { #category : 'feedback' }
 PerfUMateSearchSpace >> feed: aFeedback [
-	"Reward the derivation that built the case, once per feedback (every mutator forwards it)"
+	"Reward the derivation that built the case, once per feedback (every mutator forwards it).
+	Inputs changed by the repeat or primitive mutators have no derivation: when they set a record
+	they are parsed, so their success also reaches the grammar (unless they break a rule)"
 
-	| derivation |
+	| input improved derivation |
 	(aFeedback isNil or: [ aFeedback == lastFeedback ]) ifTrue: [ ^ self ].
 	lastFeedback := aFeedback.
-	(aFeedback case isKindOf: PerfUMateInput) ifFalse: [ ^ self ].
-	derivation := aFeedback case key ifNotNil: [ :key | cache at: key ifAbsent: [ nil ] ].
+	input := aFeedback case.
+	improved := aFeedback improvement > 0.
+	(input isKindOf: PerfUMateInput) ifFalse: [
+		(trace notNil and: [ improved ]) ifTrue: [ trace markLastAsRecordWith: nil ].
+		^ self ].
+	(trace notNil and: [ improved ]) ifTrue: [ trace markLastAsRecordWith: input graph ].
+	derivation := input key ifNotNil: [ :key | cache at: key ifAbsent: [ nil ] ].
+	(derivation isNil and: [ improved ]) ifTrue: [ derivation := self parse: input graph veryDeepCopy ].
 	derivation ifNil: [ ^ self ].
 	[ grammar backpropagate: derivation improvement: aFeedback improvement ]
 		on: Error
@@ -185,6 +194,12 @@ PerfUMateSearchSpace >> takeDerivationFor: anInput [
 	anInput key ifNotNil: [ :key |
 		(cache removeKey: key ifAbsent: [ nil ]) ifNotNil: [ :derivation | ^ derivation ] ].
 	^ self parse: anInput graph veryDeepCopy
+]
+
+{ #category : 'accessing' }
+PerfUMateSearchSpace >> trace: aPerfUMateTrace [
+
+	trace := aPerfUMateTrace
 ]
 
 { #category : 'accessing' }

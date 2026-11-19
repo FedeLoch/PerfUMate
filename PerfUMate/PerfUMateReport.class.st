@@ -21,7 +21,8 @@ Class {
 		'findings',
 		'baselineMicroseconds',
 		'referenceExample',
-		'elapsed'
+		'elapsed',
+		'trace'
 	],
 	#category : 'PerfUMate-Report',
 	#package : 'PerfUMate',
@@ -92,17 +93,60 @@ PerfUMateReport >> inspectionFindings: aBuilder [
 				   width: 80;
 				   yourself);
 		  addColumn: ((SpStringTableColumn title: 'Finding' evaluated: [ :finding | finding summary ])
-				   width: 520;
+				   width: 600;
 				   yourself);
 		  addColumn: (SpStringTableColumn title: 'Minimized input' evaluated: [ :finding | finding minimizedSton ]);
 		  yourself
 ]
 
 { #category : 'inspecting' }
+PerfUMateReport >> charts [
+
+	^ PerfUMateCharts on: self
+]
+
+{ #category : 'inspecting' }
+PerfUMateReport >> inspectionBugs: aBuilder [
+
+	<inspectorPresentationOrder: 2 title: 'Bugs'>
+	^ aBuilder newRoassal
+		  canvas: self charts bugsCanvas;
+		  yourself
+]
+
+{ #category : 'inspecting' }
+PerfUMateReport >> inspectionCampaign: aBuilder [
+
+	<inspectorPresentationOrder: 1 title: 'Campaign'>
+	^ aBuilder newRoassal
+		  canvas: self charts campaignCanvas;
+		  yourself
+]
+
+{ #category : 'inspecting' }
+PerfUMateReport >> inspectionGrammarHits: aBuilder [
+
+	<inspectorPresentationOrder: 4 title: 'Grammar hits'>
+	^ aBuilder newRoassal
+		  canvas: self charts grammarCanvas;
+		  yourself
+]
+
+{ #category : 'inspecting' }
+PerfUMateReport >> inspectionMutators: aBuilder [
+
+	<inspectorPresentationOrder: 3 title: 'Mutators'>
+	^ aBuilder newRoassal
+		  canvas: self charts mutatorsCanvas;
+		  yourself
+]
+
+{ #category : 'inspecting' }
 PerfUMateReport >> inspectionGrammar: aBuilder [
 
-	<inspectorPresentationOrder: 2 title: 'Grammar'>
-	^ aBuilder newText
+	<inspectorPresentationOrder: 6 title: 'Grammar'>
+	^ aBuilder newCode
+		  withoutSyntaxHighlight;
 		  text: (grammar mateDefinition copyReplaceAll: String lf with: String cr);
 		  beNotEditable;
 		  yourself
@@ -111,7 +155,7 @@ PerfUMateReport >> inspectionGrammar: aBuilder [
 { #category : 'inspecting' }
 PerfUMateReport >> inspectionTests: aBuilder [
 
-	<inspectorPresentationOrder: 1 title: 'Tests'>
+	<inspectorPresentationOrder: 5 title: 'Tests'>
 	^ aBuilder newCode
 		  text: self testSource;
 		  beForScripting;
@@ -168,6 +212,19 @@ PerfUMateReport >> saveTo: aDirectoryName [
 	(directory / (name , '-tests.st')) writeStreamDo: [ :stream |
 		stream nextPutAll: (self testSource copyReplaceAll: String cr with: String lf) ].
 	^ directory
+]
+
+{ #category : 'accessing' }
+PerfUMateReport >> trace [
+	"Every run of the search (PerfUMateTrace)"
+
+	^ trace ifNil: [ trace := PerfUMateTrace new ]
+]
+
+{ #category : 'accessing' }
+PerfUMateReport >> trace: aPerfUMateTrace [
+
+	trace := aPerfUMateTrace
 ]
 
 { #category : 'accessing' }

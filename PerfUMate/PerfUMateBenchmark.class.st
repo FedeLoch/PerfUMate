@@ -11,7 +11,8 @@ Class {
 		'block',
 		'receiver',
 		'selector',
-		'timeout'
+		'timeout',
+		'trace'
 	],
 	#category : 'PerfUMate-Core',
 	#package : 'PerfUMate',
@@ -162,9 +163,33 @@ PerfUMateBenchmark >> microsecondsOn: aGraph [
 
 { #category : 'running' }
 PerfUMateBenchmark >> runOn: anInput [
-	"The method Ume's schema calls"
+	"The method Ume's schema calls. During a campaign every run is recorded in the trace"
 
-	^ self valueWith: anInput graph
+	| objects start |
+	trace ifNil: [ ^ self valueWith: anInput graph ].
+	objects := trace objectCountOf: anInput graph.
+	start := Time microsecondClockValue.
+	^ [
+	  | result |
+	  result := self valueWith: anInput graph.
+	  trace record: Time microsecondClockValue - start outcome: #ok error: nil objects: objects.
+	  result ]
+		  on: Error
+		  do: [ :error |
+			  trace
+				  record: Time microsecondClockValue - start
+				  outcome: ((error isKindOf: PerfUMateTimeout)
+						   ifTrue: [ #timeout ]
+						   ifFalse: [ #error ])
+				  error: error class name
+				  objects: objects.
+			  error pass ]
+]
+
+{ #category : 'accessing' }
+PerfUMateBenchmark >> trace: aPerfUMateTraceOrNil [
+
+	trace := aPerfUMateTraceOrNil
 ]
 
 { #category : 'initialization' }

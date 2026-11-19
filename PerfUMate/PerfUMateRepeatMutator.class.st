@@ -34,3 +34,9 @@ PerfUMateRepeatMutator >> mutateInput: anInput [
 			 (elements first: start + runSize - 1) , inserted , (elements allButFirst: start + runSize - 1)).
 	^ space inputForGraph: graph
 ]
+
+{ #category : 'printing' }
+PerfUMateRepeatMutator >> label [
+
+	^ 'repeat elements'
+]

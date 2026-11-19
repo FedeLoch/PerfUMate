@@ -107,7 +107,24 @@ PerfUMateTest >> assertInspectorTabsOf: aReport [
 	self assert: findings items size equals: aReport findings size.
 	self assert: findings columns size equals: 3.
 	self assert: ((aReport inspectionTests: builder) text asString includesSubstring: 'perfumateBenchmark').
-	self assert: ((aReport inspectionGrammar: builder) text asString includesSubstring: 'PerfUMateExampleOrder')
+	self assert: ((aReport inspectionGrammar: builder) text asString includesSubstring: 'PerfUMateExampleOrder').
+	self assertChartsOf: aReport
+]
+
+{ #category : 'tests' }
+PerfUMateTest >> assertChartsOf: aReport [
+	"Every chart builds and draws, and the trace saw the campaign"
+
+	self denyEmpty: aReport trace runs.
+	self assert: (aReport trace runs allSatisfy: [ :run | run microseconds >= 0 ]).
+	self denyEmpty: aReport trace mutatorStatistics.
+	#( #campaignCanvas #bugsCanvas #mutatorsCanvas #grammarCanvas ) do: [ :selector |
+		| canvas morph |
+		canvas := aReport charts perform: selector.
+		self assert: canvas shapes size > 3.
+		morph := canvas createMorph.
+		morph extent: 800 @ 400.
+		self assert: morph imageForm notNil ]
 ]
 
 { #category : 'tests' }

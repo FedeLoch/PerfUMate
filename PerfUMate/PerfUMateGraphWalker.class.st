@@ -66,6 +66,14 @@ PerfUMateGraphWalker >> numberSlots [
 	^ self slots select: [ :slot | slot value isInteger or: [ slot value isFloat ] ]
 ]
 
+{ #category : 'slots' }
+PerfUMateGraphWalker >> objectCount [
+	"Objects in the graph, leaves (numbers, strings...) not counted"
+
+	self slots.
+	^ seen size
+]
+
 { #category : 'testing' }
 PerfUMateGraphWalker >> reaches: anObject [
 

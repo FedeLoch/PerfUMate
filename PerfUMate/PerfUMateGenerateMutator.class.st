@@ -15,3 +15,9 @@ PerfUMateGenerateMutator >> mutateInput: anInput [
 
 	^ space inputFor: (space generateDerivation: space validity)
 ]
+
+{ #category : 'printing' }
+PerfUMateGenerateMutator >> label [
+
+	^ 'new graph'
+]

@@ -19,7 +19,8 @@ Class {
 		'startTime',
 		'deadline',
 		'baselineMicroseconds',
-		'referenceExample'
+		'referenceExample',
+		'trace'
 	],
 	#category : 'PerfUMate-Core',
 	#package : 'PerfUMate',
@@ -206,7 +207,8 @@ PerfUMateCampaign >> run [
 	space := PerfUMateSearchSpace grammar: grammar rootType: configuration rootType validity: configuration validity.
 	space maxElements: configuration maxElements.
 	self measureBaseline.
-	umeResult := self runUmeFor: deadline - (configuration budget * 0.2) - DateAndTime now.
+	umeResult := [ self runUmeFor: deadline - (configuration budget * 0.2) - DateAndTime now ]
+		             ensure: [ benchmark trace: nil ].
 	findings := self findingsFrom: umeResult.
 	^ PerfUMateReport new
 		  setConfiguration: configuration
@@ -215,7 +217,9 @@ PerfUMateCampaign >> run [
 		  findings: findings
 		  baseline: baselineMicroseconds
 		  reference: referenceExample
-		  elapsed: DateAndTime now - startTime
+		  elapsed: DateAndTime now - startTime;
+		  trace: trace;
+		  yourself
 ]
 
 { #category : 'campaign' }
@@ -229,6 +233,9 @@ PerfUMateCampaign >> runUmeFor: aDuration [
 		          heuristic: configuration corpusHeuristic;
 		          yourself.
 	corpus mutatorSelector: configuration mutatorSelector.
+	trace := PerfUMateTrace new corpus: corpus; yourself.
+	benchmark trace: trace.
+	space trace: trace.
 	schema := UmeSchema new
 		          receiverConstraint: (UmeObjectConstraint new generator: (UmeGenerator always: benchmark));
 		          argumentConstraints: { (UmeObjectConstraint new generator: corpus) };

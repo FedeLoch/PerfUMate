@@ -63,3 +63,9 @@ PerfUMatePrimitiveMutator >> mutateString: aString [
 		  [ '' ].
 		  [ aString , aString ] } atRandom value
 ]
+
+{ #category : 'printing' }
+PerfUMatePrimitiveMutator >> label [
+
+	^ 'primitive values'
+]
