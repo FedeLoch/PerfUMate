@@ -96,13 +96,13 @@ The report:
 
 ```
 PerfUMate: 2 slow input(s), 2 error(s) in 0:00:01:00
-17.5x slower than the median input (143 us vs 8 us) - breaks: Array size 56 not between 0 and 16
-10.3x slower than the median input (84 us vs 8 us) - breaks: Array size 42 not between 0 and 16
+14.7x slower than the median input (133 us vs 9 us) - breaks: Array size 22 not between 0 and 16
+14.7x slower than the median input (133 us vs 9 us) - breaks: Array size 24 not between 0 and 16
 SubscriptOutOfBounds in PerfUMateExampleCheckout>>#discountFor:: 1 in ''
 ZeroDivide in PerfUMateExampleCheckout>>#process:
 ```
 
-The slow inputs are orders with 56 and 42 items: `loyaltyPointsFor:` is quadratic in the number
+The slow inputs are orders with 22 and 24 items (from 1024 before minimization): `loyaltyPointsFor:` is quadratic in the number
 of items. The broken rule says why the examples did not show it, as they never had more than 3
 items. The two crashes were found on the way: coupons shorter than 3 characters, and orders
 without units.
@@ -130,6 +130,14 @@ the right is the complexity of the slow path: here, quadratic.
     <td><b>Bugs</b>: errors hit during the search, and each finding before and after minimization.</td>
     <td><b>Mutators</b>: runs and records per mutator, and what MOpt ended up preferring.</td>
     <td><b>Grammar hits</b>: the most generated grammar points, and the rules the best inputs break.</td>
+  </tr>
+  <tr>
+    <td colspan="2"><a href="images/report-tests.png"><img src="images/report-tests.png" alt="Tests tab"/></a></td>
+    <td><a href="images/report-grammar-definition.png"><img src="images/report-grammar-definition.png" alt="Grammar tab"/></a></td>
+  </tr>
+  <tr>
+    <td colspan="2"><b>Tests</b>: the generated SUnit methods, one per finding, ready to compile with <code>generateTestsIn:package:</code>.</td>
+    <td><b>Grammar</b>: the grammar the campaign used, inferred from the examples and widened.</td>
   </tr>
 </table>
 
@@ -200,9 +208,9 @@ testPerfUMate01Error
     self assertNoErrorOn: (STON fromString: 'PerfUMateExampleOrder{#items:OrderedCollection[],#coupon:''''}')
 
 testPerfUMate03SlowInput
-    "PerfUMate: 17.5x slower than the median input (143 us vs 8 us)"
+    "PerfUMate: 14.7x slower than the median input (133 us vs 9 us)"
     self
-        assertInput: (STON fromString: 'PerfUMateExampleOrder{#items:OrderedCollection[...56 items...]}')
+        assertInput: (STON fromString: 'PerfUMateExampleOrder{#items:OrderedCollection[...22 items...]}')
         isAtMost: 10
         timesSlowerThan: self perfumateReferenceInput
 ```
