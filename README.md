@@ -13,6 +13,10 @@ for the ones that take the longest, reduces each one to a small input that is st
 generates an SUnit test for it. Crashes found on the way are reported too, and
 `lookFor: #errors` hunts for crashes and other bugs instead.
 
+Built on [Mate](https://github.com/FedeLoch/Mate) (object graph grammars),
+[Ume](https://github.com/FedeLoch/Ume) (guided fuzzing) and
+[Shin](https://github.com/FedeLoch/Shin) (input minimization).
+
 <p align="center">
   <img src="images/flow.svg" alt="examples, Mate, Ume, Shin, tests" width="680"/>
 </p>
@@ -36,18 +40,22 @@ loyalty points.
 ```smalltalk
 PerfUMateExampleCheckout >> process: anOrder [
     | total units |
+    
     total := anOrder items inject: 0 into: [ :sum :item | sum + (item quantity * item price) ].
+
     units := anOrder items inject: 0 into: [ :sum :item | sum + item quantity ].
     ^ { total - (self discountFor: anOrder). total // units. self loyaltyPointsFor: anOrder }
 ]
 
 PerfUMateExampleCheckout >> loyaltyPointsFor: anOrder [
     "For every item, count the items with the same name"
+    
     ^ anOrder items inject: 0 into: [ :points :item |
         points + (anOrder items count: [ :other | other name = item name ]) ]
 ]
 
 PerfUMateExampleCheckout >> discountFor: anOrder [
+
     ^ (anOrder coupon first: 3) = 'VIP' ifTrue: [ 10 ] ifFalse: [ 0 ]
 ]
 ```
@@ -128,7 +136,7 @@ Each error is minimized while keeping the same exception and the same method. Th
 keeps a 3 character coupon because a shorter one would hit the first bug instead. Errors are
 located at the first method of your code on the stack, not at `Object>>errorSubscriptBounds:`.
 
-## Example: counting method calls
+## Performance Hunting Example Counting Method Calls
 
 Execution time is noisy, and a loop that grows from 3 to 30 iterations barely shows in it.
 Counting calls is exact. Give the methods to count and PerfUMate guides the search by how many
@@ -141,7 +149,8 @@ report := PerfUMate new
     measure: #methodCalls;                                               "or #bytecodes"
     instrument: {                                                        "required with #methodCalls"
         PerfUMateExampleCheckout >> #loyaltyPointsFor:.
-        PerfUMateExampleItem >> #name };
+        PerfUMateExampleItem >> #name
+    };
     budget: 1 minute;                                                    "optional"
     run.
 ```
@@ -214,7 +223,3 @@ so pull requests can run short campaigns and nightly jobs long ones. See
 - [docs/EXAMPLES.md](docs/EXAMPLES.md): step by step examples, from the minimal campaign to custom guides.
 - [docs/TECHNICAL.md](docs/TECHNICAL.md): how each part works and can be configured (corpus, grammar mutators, MOpt, feedback, weighted grammars, instrumentation, metrics).
 - [docs/DESIGN.md](docs/DESIGN.md): design notes and proposed changes to Ume, Mate and Shin.
-
-Built on [Mate](https://github.com/FedeLoch/Mate) (object graph grammars),
-[Ume](https://github.com/FedeLoch/Ume) (guided fuzzing) and
-[Shin](https://github.com/FedeLoch/Shin) (input minimization).
