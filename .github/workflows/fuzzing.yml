@@ -1,0 +1,33 @@
+name: Fuzzing
+
+# PerfUMate fuzzing Pharo's libraries (STON, Fuel, collections, printing) and itself, every night,
+# with the PerfUMate action of this repository. The findings are on the job page, the full
+# reports in the perfumate-report artifact.
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      budget:
+        description: Seconds per campaign
+        default: '300'
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PerfUMate campaigns
+        uses: ./
+        with:
+          baseline: PerfUMate
+          groups: campaigns
+          campaigns: PerfUMateCampaigns, PerfUMateSelfCampaigns
+          budget: ${{ inputs.budget || '300' }}
+          perfumate: tonel://${{ github.workspace }}

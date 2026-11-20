@@ -97,7 +97,7 @@ PerfUMateExampleOrder -> {
 The report:
 
 ```
-PerfUMate: 2 slow input(s), 2 error(s) in 0:00:01:00
+PerfUMate: 2 slow input(s), 2 error(s) in 1 min
 16.0x slower than the median input (116 us vs 7 us) - breaks: Array size 76 not between 0 and 16
 17.0x slower than the median input (123 us vs 7 us) - breaks: Array size 80 not between 0 and 16
 SubscriptOutOfBounds in PerfUMateExampleCheckout>>#discountFor:: 1 in ''
@@ -125,7 +125,7 @@ report := PerfUMate new
 ```
 
 ```
-PerfUMate: 0 slow input(s), 2 error(s) in 0:00:00:48
+PerfUMate: 0 slow input(s), 2 error(s) in 48 s
 SubscriptOutOfBounds in PerfUMateExampleCheckout>>#discountFor:: 1 in ''
     PerfUMateExampleOrder{#items:OrderedCollection[],#coupon:''}
 ZeroDivide in PerfUMateExampleCheckout>>#process:
@@ -156,7 +156,7 @@ report := PerfUMate new
 ```
 
 ```
-PerfUMate: 3 slow input(s), 1 error(s) in 0:00:01:00
+PerfUMate: 3 slow input(s), 1 error(s) in 1 min
 9.1x slower than the median input (50 us vs 6 us) - breaks: Array size 41 not between 0 and 16
 8.4x slower than the median input (46 us vs 6 us) - breaks: Array size 39 not between 0 and 16
 7.6x slower than the median input (42 us vs 6 us) - breaks: Array size 37 not between 0 and 16
@@ -313,9 +313,43 @@ Advanced options (`mutators:`, `mutatorSelector:`, `corpusHeuristic:`, `mutation
 
 ## In CI
 
-A campaign can run as an SUnit test: subclass `PerfUMateCampaignTest` and call
-`assertNoFindings:`. `PERFUMATE_BUDGET` (seconds) changes the budget without touching the code,
-so pull requests can run short campaigns and nightly jobs long ones. See
+PerfUMate is also a GitHub Action. Declare campaigns as class-side methods with the
+`<perfumate>` pragma:
+
+```smalltalk
+MyShopCampaigns class >> checkout [
+    <perfumate>
+    ^ PerfUMate new
+        examples: MyShopExamples orders;
+        benchmark: [ :order | Checkout new process: order ]
+]
+```
+
+and run them from a workflow:
+
+```yaml
+on:
+  schedule:
+    - cron: '0 3 * * *'      # every night
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: FedeLoch/PerfUMate@main
+        with:
+          baseline: MyShop             # BaselineOfMyShop
+          directory: src               # where the Tonel sources are
+          campaigns: MyShopCampaigns
+          budget: 600                  # seconds per campaign
+```
+
+The job page shows a summary of every campaign and its findings, and the `perfumate-report`
+artifact holds, per campaign, the HTML report with its charts, the PNG charts, the generated
+tests, the trace as CSV and the report itself (`PerfUMateReport fromFolder:name:` loads it back).
+`fail-on-findings: true` makes the job fail when something is found. PerfUMate runs its own
+campaigns this way every night: [fuzzing.yml](.github/workflows/fuzzing.yml). More options:
 [GitHub Actions integration](https://github.com/FedeLoch/PerfUMate/wiki/GitHub-Actions-Integration).
 
 ## More

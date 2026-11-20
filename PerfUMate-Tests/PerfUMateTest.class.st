@@ -94,6 +94,8 @@ PerfUMateTest >> testReportIsSaved [
 	self assert: ((directory / 'checkout.md') contents includesSubstring: '# PerfUMate: checkout').
 	self assert: (directory / 'checkout-tests.st') exists.
 	self assert: ((directory / 'checkout-trace.csv') contents lines size) equals: report trace runs size + 1.
+	self assert: ((directory / 'checkout.html') contents includesSubstring: '<h2>Findings</h2>').
+	self assert: (directory / 'checkout-campaign.png') exists.
 	self assertInspectorTabsOf: report.
 	self assertLoadedFrom: directory matches: report
 ]
@@ -157,6 +159,27 @@ PerfUMateTest >> testAdvancedOptions [
 		          run.
 	self denyEmpty: report slowInputs.
 	self assert: (report slowInputs allSatisfy: [ :finding | finding original items size <= 256 ])
+]
+
+{ #category : 'tests' }
+PerfUMateTest >> testRunsDeclaredCampaigns [
+	"What the GitHub Action does: run every <perfumate> method of a class, save the reports, and
+	write the summary for the job page"
+
+	| directory results |
+	directory := FileLocator imageDirectory / 'perfumate-test-out'.
+	directory ensureDeleteAll.
+	[
+	results := PerfUMate runCampaignsIn: 'PerfUMateExampleCampaigns' into: directory.
+	self assert: results size equals: 1.
+	self assert: results first key equals: #checkout.
+	self assert: (directory / 'checkout.ston') exists.
+	self assert: ((directory / 'checkout.html') contents includesSubstring: 'data:image/png;base64,').
+	#( 'campaign' 'bugs' 'mutators' 'grammar' ) do: [ :chart |
+		self assert: (directory / ('checkout-' , chart , '.png')) exists ].
+	self assert: ((directory / 'summary.md') contents includesSubstring: '| checkout |').
+	self assert: (directory / 'findings.txt') contents asNumber equals: results first value findings size ]
+		ensure: [ directory ensureDeleteAll ]
 ]
 
 { #category : 'tests' }

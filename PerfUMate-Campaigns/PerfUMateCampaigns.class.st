@@ -127,6 +127,7 @@ PerfUMateCampaigns class >> checkRoundTrip: aGraph through: aBlock [
 { #category : 'campaigns' }
 PerfUMateCampaigns class >> copying [
 	"Termo: graphcopy"
+	<perfumate>
 
 	^ PerfUMate new
 		  name: 'copying';
@@ -141,6 +142,7 @@ PerfUMateCampaigns class >> copying [
 { #category : 'campaigns' }
 PerfUMateCampaigns class >> equality [
 	"Termo: graphequal"
+	<perfumate>
 
 	^ PerfUMate new
 		  name: 'equality';
@@ -155,6 +157,7 @@ PerfUMateCampaigns class >> equality [
 { #category : 'campaigns' }
 PerfUMateCampaigns class >> fuel [
 	"Termo: graphfuel"
+	<perfumate>
 
 	^ PerfUMate new
 		  name: 'fuel';
@@ -172,6 +175,7 @@ PerfUMateCampaigns class >> fuel [
 PerfUMateCampaigns class >> hashing [
 	"Termo performance hunt: hash-ints. Keys are wrapped in PerfUMateKey, so the probes of the
 	hashed collections (hash and = of the keys) can be counted without instrumenting the kernel"
+	<perfumate>
 
 	^ PerfUMate new
 		  name: 'hashing';
@@ -187,6 +191,7 @@ PerfUMateCampaigns class >> hashing [
 { #category : 'campaigns' }
 PerfUMateCampaigns class >> printing [
 	"Termo: graphprint"
+	<perfumate>
 
 	^ PerfUMate new
 		  name: 'printing';
@@ -211,6 +216,7 @@ PerfUMateCampaigns class >> relatedValues [
 { #category : 'campaigns' }
 PerfUMateCampaigns class >> ston [
 	"Termo: graphston"
+	<perfumate>
 
 	^ PerfUMate new
 		  name: 'ston';

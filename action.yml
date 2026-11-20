@@ -1,0 +1,112 @@
+name: PerfUMate fuzzing
+description: Run PerfUMate fuzzing campaigns on a Pharo project, show the findings on the job page and keep the full report.
+branding:
+  icon: activity
+  color: red
+
+inputs:
+  baseline:
+    description: Name of the project's baseline, without BaselineOf.
+    required: true
+  directory:
+    description: Directory of the Tonel sources in the repository.
+    default: ''
+  groups:
+    description: Baseline groups to load, separated by commas.
+    default: default
+  campaigns:
+    description: Class whose class-side methods with the <perfumate> pragma answer the campaigns (several separated by commas).
+    required: true
+  budget:
+    description: Seconds per campaign.
+    default: '300'
+  pharo:
+    description: Pharo version, as get.pharo.org names it (130 for Pharo 13).
+    default: '130'
+  output:
+    description: Directory for the reports, relative to the workspace.
+    default: perfumate-out
+  artifact-name:
+    description: Name of the artifact holding the reports.
+    default: perfumate-report
+  fail-on-findings:
+    description: Fail the job when a campaign finds something.
+    default: 'false'
+  perfumate:
+    description: Where to load PerfUMate from.
+    default: github://FedeLoch/PerfUMate:main
+  theme:
+    description: Pharo theme the charts are drawn with.
+    default: DarkBlueTheme
+
+outputs:
+  findings:
+    description: Number of findings of all the campaigns.
+    value: ${{ steps.run.outputs.findings }}
+
+runs:
+  using: composite
+  steps:
+    - name: Restore the Pharo image
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/perfumate-pharo
+        # The image holds the project's code: any source change loads it again
+        key: perfumate-${{ runner.os }}-${{ inputs.pharo }}-${{ inputs.perfumate }}-${{ inputs.groups }}-${{ hashFiles('**/*.st') }}
+
+    - name: Download Pharo
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        mkdir -p "$RUNNER_TEMP/perfumate-pharo"
+        cd "$RUNNER_TEMP/perfumate-pharo"
+        curl -fsSL "https://get.pharo.org/64/${{ inputs.pharo }}+vm" | bash
+
+    - name: Load PerfUMate and ${{ inputs.baseline }}
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        PERFUMATE_SOURCE: ${{ inputs.perfumate }}
+        PERFUMATE_BASELINE: ${{ inputs.baseline }}
+        PERFUMATE_REPOSITORY: tonel://${{ github.workspace }}/${{ inputs.directory }}
+        PERFUMATE_GROUPS: ${{ inputs.groups }}
+      run: |
+        cd "$RUNNER_TEMP/perfumate-pharo"
+        ./pharo Pharo.image st --save --quit "${{ github.action_path }}/scripts/ci/load.st"
+
+    - name: Run the campaigns of ${{ inputs.campaigns }}
+      id: run
+      shell: bash
+      env:
+        PERFUMATE_CAMPAIGNS: ${{ inputs.campaigns }}
+        PERFUMATE_BUDGET: ${{ inputs.budget }}
+        PERFUMATE_OUT: ${{ github.workspace }}/${{ inputs.output }}
+        PERFUMATE_THEME: ${{ inputs.theme }}
+      run: |
+        cd "$RUNNER_TEMP/perfumate-pharo"
+        ./pharo Pharo.image st --quit "${{ github.action_path }}/scripts/ci/run.st"
+        echo "findings=$(cat "$PERFUMATE_OUT/findings.txt" 2>/dev/null || echo 0)" >> "$GITHUB_OUTPUT"
+
+    - name: Show the findings on the job page
+      if: always()
+      shell: bash
+      run: |
+        if [ -f "${{ github.workspace }}/${{ inputs.output }}/summary.md" ]; then
+          cat "${{ github.workspace }}/${{ inputs.output }}/summary.md" >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Keep the reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ github.workspace }}/${{ inputs.output }}
+        if-no-files-found: warn
+
+    - name: Fail on findings
+      if: inputs.fail-on-findings == 'true' && steps.run.outputs.findings != '0'
+      shell: bash
+      run: |
+        echo "::error::PerfUMate found ${{ steps.run.outputs.findings }} problem(s). See the job summary and the ${{ inputs.artifact-name }} artifact."
+        exit 1

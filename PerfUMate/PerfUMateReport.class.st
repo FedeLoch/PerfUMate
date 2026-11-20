@@ -63,6 +63,18 @@ PerfUMateReport >> elapsed [
 	^ elapsed
 ]
 
+{ #category : 'printing' }
+PerfUMateReport >> elapsedString [
+	"'48 s', '1 min', '5 min 12 s'"
+
+	| seconds |
+	seconds := elapsed asSeconds rounded.
+	seconds < 60 ifTrue: [ ^ seconds printString , ' s' ].
+	^ String streamContents: [ :stream |
+		  stream print: seconds // 60; nextPutAll: ' min'.
+		  seconds \\ 60 > 0 ifTrue: [ stream space; print: seconds \\ 60; nextPutAll: ' s' ] ]
+]
+
 { #category : 'accessing' }
 PerfUMateReport >> errors [
 
@@ -193,7 +205,7 @@ PerfUMateReport >> printOn: aStream [
 		nextPutAll: ' slow input(s), ';
 		print: self errors size;
 		nextPutAll: ' error(s) in ';
-		print: elapsed
+		nextPutAll: self elapsedString
 ]
 
 { #category : 'accessing' }
@@ -221,10 +233,12 @@ PerfUMateReport >> saveTo: aDirectoryName [
 	- <name>.md: the summary, with the minimized inputs;
 	- <name>-tests.st: the generated test methods;
 	- <name>-trace.csv: one row per run of the search;
-	- <name>.ston: the whole report, to load back with #fromFolder:name:.
+	- <name>.ston: the whole report, to load back with #fromFolder:name:;
+	- <name>-campaign.png, -bugs.png, -mutators.png, -grammar.png: the charts;
+	- <name>.html: one page with the findings, the charts, the tests and the grammar.
 	Several campaigns can share the directory"
 
-	| directory |
+	| directory charts |
 	directory := aDirectoryName asFileReference.
 	directory ensureCreateDirectory.
 	(directory / (self name , '.md')) ensureDelete; writeStreamDo: [ :stream | stream nextPutAll: self summary ].
@@ -233,19 +247,118 @@ PerfUMateReport >> saveTo: aDirectoryName [
 	(directory / (self name , '-trace.csv')) ensureDelete; writeStreamDo: [ :stream | self trace writeCsvOn: stream ].
 	(directory / (self name , '.ston')) ensureDelete; writeStreamDo: [ :stream |
 		STON put: self savedDictionary onStreamPretty: stream ].
+	charts := self writeChartsTo: directory.
+	(directory / (self name , '.html')) ensureDelete; writeStreamDo: [ :stream | self writeHtmlOn: stream charts: charts ].
 	^ directory
+]
+
+{ #category : 'saving' }
+PerfUMateReport >> writeChartsTo: aDirectory [
+	"The charts of the inspector tabs as PNG files, <name>-campaign.png and so on, drawn with the
+	current theme. Answers the files written; a chart that cannot be drawn is skipped"
+
+	| files |
+	files := OrderedCollection new.
+	#( #campaignCanvas 'campaign' #bugsCanvas 'bugs' #mutatorsCanvas 'mutators' #grammarCanvas 'grammar' )
+		pairsDo: [ :selector :suffix |
+			| file |
+			file := aDirectory / (self name , '-' , suffix , '.png').
+			[
+			| canvas morph content extent |
+			canvas := self charts
+				          beStatic;
+				          perform: selector.
+			"The image takes the shape of the charts, 1200 pixels wide"
+			content := canvas encompassingRectangle.
+			extent := 1200 @ (1200 * content height / (content width max: 1) + 24) rounded.
+			morph := canvas createMorph.
+			morph extent: extent.
+			canvas extent: extent.
+			canvas camera zoomToFit: extent * 0.97.
+			file ensureDelete.
+			file binaryWriteStreamDo: [ :out | PNGReadWriter putForm: morph imageForm onStream: out ].
+			files add: file ]
+				on: Error
+				do: [ :error | error return: nil ] ].
+	^ files
+]
+
+{ #category : 'saving' }
+PerfUMateReport >> htmlColor: aColor [
+	"#rrggbb"
+
+	^ String streamContents: [ :stream |
+		  stream nextPut: $#.
+		  { aColor red. aColor green. aColor blue } do: [ :component |
+			  | hex |
+			  hex := ((component * 255) rounded printStringBase: 16) asLowercase.
+			  hex size < 2 ifTrue: [ stream nextPut: $0 ].
+			  stream nextPutAll: hex ] ]
+]
+
+{ #category : 'saving' }
+PerfUMateReport >> writeHtmlOn: aStream charts: someFiles [
+	"One self-contained page: findings, charts (embedded), generated tests and grammar"
+
+	| escape theme |
+	escape := [ :text |
+	          (((text asString copyReplaceAll: '&' with: '&amp;') copyReplaceAll: '<' with: '&lt;')
+		           copyReplaceAll: '>'
+		           with: '&gt;') copyReplaceAll: String cr with: String lf ].
+	theme := Smalltalk ui theme.
+	aStream
+		nextPutAll: '<!doctype html><html lang="en"><head><meta charset="utf-8">'; lf;
+		nextPutAll: '<meta name="viewport" content="width=device-width, initial-scale=1">'; lf;
+		nextPutAll: '<title>PerfUMate: '; nextPutAll: (escape value: self name); nextPutAll: '</title>'; lf;
+		nextPutAll: '<style>body{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;background:';
+		nextPutAll: (self htmlColor: theme backgroundColor);
+		nextPutAll: ';color:'; nextPutAll: (self htmlColor: theme textColor);
+		nextPutAll: ';max-width:1100px;margin:24px auto;padding:0 16px;line-height:1.45}';
+		nextPutAll: 'table{border-collapse:collapse;width:100%;table-layout:fixed}th:nth-child(1){width:10%}th:nth-child(2){width:40%}td,th{border-bottom:1px solid rgba(128,128,128,.3);padding:6px 8px;text-align:left;vertical-align:top}';
+		nextPutAll: 'code,pre{font-family:SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}pre{white-space:pre-wrap;word-break:break-all;background:rgba(128,128,128,.12);padding:12px;border-radius:6px}';
+		nextPutAll: 'img{max-width:100%;display:block;margin:12px 0}.muted{opacity:.7}code{word-break:break-all}</style></head><body>'; lf;
+		nextPutAll: '<h1>PerfUMate: '; nextPutAll: (escape value: self name); nextPutAll: '</h1>'; lf;
+		nextPutAll: '<p class="muted">'; nextPutAll: (escape value: self printString); nextPutAll: '</p>'; lf;
+		nextPutAll: '<h2>Findings</h2>'; lf.
+	findings isEmpty
+		ifTrue: [ aStream nextPutAll: '<p>No findings.</p>'; lf ]
+		ifFalse: [
+			aStream nextPutAll: '<table><tr><th>Kind</th><th>Finding</th><th>Minimized input</th></tr>'; lf.
+			findings do: [ :finding |
+				aStream
+					nextPutAll: '<tr><td>'; nextPutAll: (finding isError ifTrue: [ 'error' ] ifFalse: [ 'slow input' ]);
+					nextPutAll: '</td><td>'; nextPutAll: (escape value: finding summary);
+					nextPutAll: '</td><td><code>'; nextPutAll: (escape value: finding minimizedSton);
+					nextPutAll: '</code></td></tr>'; lf ].
+			aStream nextPutAll: '</table>'; lf ].
+	someFiles ifNotEmpty: [
+		aStream nextPutAll: '<h2>Charts</h2>'; lf.
+		someFiles do: [ :file |
+			aStream
+				nextPutAll: '<img alt="'; nextPutAll: file basenameWithoutExtension;
+				nextPutAll: '" src="data:image/png;base64,';
+				nextPutAll: (file binaryReadStreamDo: [ :in | in upToEnd ]) base64Encoded;
+				nextPutAll: '">'; lf ] ].
+	aStream
+		nextPutAll: '<h2>Generated tests</h2><pre>'; nextPutAll: (escape value: self testSource); nextPutAll: '</pre>'; lf;
+		nextPutAll: '<h2>Grammar</h2><pre>'; nextPutAll: (escape value: grammar mateDefinition); nextPutAll: '</pre>'; lf;
+		nextPutAll: '</body></html>'; lf
 ]
 
 { #category : 'saving' }
 PerfUMateReport >> savedDictionary [
 
+	findings do: [ :finding | finding prepareForSaving ].
+	self trace prepareForSaving.
 	^ OrderedDictionary new
 		  at: #name put: self name;
 		  at: #elapsedMilliseconds put: elapsed asMilliSeconds;
 		  at: #baselineMicroseconds put: baselineMicroseconds;
 		  at: #slowdown put: self slowdown;
 		  at: #grammar put: grammar mateDefinition;
-		  at: #referenceExample put: referenceExample;
+		  at: #referenceExample put: ([ STON toString: referenceExample ]
+				   on: Error
+				   do: [ :error | error return: nil ]);
 		  at: #findings put: findings;
 		  at: #trace put: self trace;
 		  at: #tests put: self testSource;
@@ -260,7 +373,7 @@ PerfUMateReport >> setSaved: aDictionary [
 	baselineMicroseconds := aDictionary at: #baselineMicroseconds.
 	slowdown := aDictionary at: #slowdown.
 	grammar := PerfUMate grammarFromSource: (aDictionary at: #grammar).
-	referenceExample := aDictionary at: #referenceExample.
+	referenceExample := PerfUMateFinding parse: (aDictionary at: #referenceExample).
 	findings := (aDictionary at: #findings) asArray.
 	trace := aDictionary at: #trace.
 	savedTests := aDictionary at: #tests

@@ -13,12 +13,20 @@ Class {
 		'mutator',
 		'objects',
 		'isRecord',
-		'input'
+		'input',
+		'inputText'
 	],
 	#category : 'PerfUMate-Report',
 	#package : 'PerfUMate',
 	#tag : 'Report'
 }
+
+{ #category : 'ston' }
+PerfUMateRun class >> stonAllInstVarNames [
+	"The input is saved as text (see #prepareForSaving)"
+
+	^ super stonAllInstVarNames copyWithout: #input
+]
 
 { #category : 'accessing' }
 PerfUMateRun >> beRecordWith: aGraphOrNil [
@@ -30,8 +38,19 @@ PerfUMateRun >> beRecordWith: aGraphOrNil [
 
 { #category : 'accessing' }
 PerfUMateRun >> input [
+	"A run loaded from a saved report parses its input on demand"
 
+	input ifNil: [ input := PerfUMateFinding parse: inputText ].
 	^ input
+]
+
+{ #category : 'saving' }
+PerfUMateRun >> prepareForSaving [
+
+	input ifNotNil: [
+		inputText := [ STON toString: input ]
+			             on: Error
+			             do: [ :error | error return: nil ] ]
 ]
 
 { #category : 'accessing' }

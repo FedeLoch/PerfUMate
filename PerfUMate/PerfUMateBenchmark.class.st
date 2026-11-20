@@ -181,7 +181,9 @@ PerfUMateBenchmark >> runOn: anInput [
 				  outcome: ((error isKindOf: PerfUMateTimeout)
 						   ifTrue: [ #timeout ]
 						   ifFalse: [ #error ])
-				  error: error class name
+				  error: ((error isKindOf: PerfUMateBrokenInvariant)
+						   ifTrue: [ error messageText ]
+						   ifFalse: [ error class name ])
 				  objects: objects.
 			  error pass ]
 ]

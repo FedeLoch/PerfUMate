@@ -15,7 +15,8 @@ Class {
 	#superclass : 'Object',
 	#instVars : [
 		'report',
-		'canvas'
+		'canvas',
+		'isStatic'
 	],
 	#category : 'PerfUMate-Report',
 	#package : 'PerfUMate',
@@ -143,11 +144,26 @@ PerfUMateCharts >> errorRows [
 			byClass at: key put: (byClass at: key ifAbsent: [ 0 ]) + 1 ] ].
 	^ (byClass associations asSortedCollection: [ :a :b | a value >= b value ]) asArray collect: [ :each |
 		  {
-			  each key asString.
+			  (each key asString size > 40
+				   ifTrue: [ (each key asString first: 38) , '...' ]
+				   ifFalse: [ each key asString ]).
 			  each value.
 			  each value.
 			  (self count: each value of: 'run').
 			  nil } ]
+]
+
+{ #category : 'data' }
+PerfUMateCharts >> errorLabelOf: aFinding [
+	"The error class, or what broke for a PerfUMateBrokenInvariant"
+
+	| label |
+	label := aFinding signature errorClassName = #PerfUMateBrokenInvariant
+		         ifTrue: [ aFinding signature messageText ]
+		         ifFalse: [ aFinding signature errorClassName ].
+	^ label size > 40
+		  ifTrue: [ (label first: 38) , '...' ]
+		  ifFalse: [ label ]
 ]
 
 { #category : 'data' }
@@ -159,7 +175,7 @@ PerfUMateCharts >> findingRows [
 		  minimized := self objectCountOf: finding minimized.
 		  {
 			  (finding isError
-				   ifTrue: [ finding signature errorClassName ]
+				   ifTrue: [ self errorLabelOf: finding ]
 				   ifFalse: [ 'slow input ' , index printString ]).
 			  found.
 			  minimized.
@@ -181,7 +197,7 @@ PerfUMateCharts >> finish [
 			 position: 1000 @ ((bounds bottom max: 400) + 40) / 2 - (20 @ 30);
 			 yourself).
 	canvas shapes last pushBack.
-	canvas @ RSCanvasController.
+	isStatic == true ifFalse: [ canvas @ RSCanvasController ].
 	^ canvas
 ]
 
@@ -514,6 +530,13 @@ PerfUMateCharts >> section: aString at: aPoint [
 
 	self text: aString at: aPoint x @ (aPoint y + 10) size: 13 color: self ink.
 	^ aPoint y + 36
+]
+
+{ #category : 'initialization' }
+PerfUMateCharts >> beStatic [
+	"Charts for pictures: no zoom, scroll or Help label"
+
+	isStatic := true
 ]
 
 { #category : 'initialization' }

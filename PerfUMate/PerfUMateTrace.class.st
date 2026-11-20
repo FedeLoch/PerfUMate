@@ -44,6 +44,12 @@ PerfUMateTrace >> initialize [
 	runs := OrderedCollection new
 ]
 
+{ #category : 'saving' }
+PerfUMateTrace >> prepareForSaving [
+
+	runs do: [ :run | run prepareForSaving ]
+]
+
 { #category : 'recording' }
 PerfUMateTrace >> freeze [
 	"End of the search: keep MOpt's final probabilities and let the corpus go"

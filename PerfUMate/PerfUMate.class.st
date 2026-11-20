@@ -54,6 +54,96 @@ PerfUMate class >> budgetFromEnvironmentOr: aDuration [
 		  ifNotNil: [ :seconds | seconds asNumber seconds ]
 ]
 
+{ #category : 'ci' }
+PerfUMate class >> campaignsIn: aClass [
+	"The campaigns a class declares: class-side methods with the <perfumate> pragma, each answering
+	a configured PerfUMate"
+
+	^ (aClass class methods select: [ :method | method hasPragmaNamed: #perfumate ]) asSortedCollection: [ :a :b |
+		  a selector <= b selector ]
+]
+
+{ #category : 'ci' }
+PerfUMate class >> runCampaignsIn: someClassesOrNames into: aDirectoryName [
+	"Run every campaign the given classes declare (see #campaignsIn:), each for PERFUMATE_BUDGET
+	seconds when set, and save each report into aDirectoryName (see PerfUMateReport >> #saveTo:).
+	The classes: a class, its name, several names separated by commas, or a collection of them.
+	Also write summary.md, a markdown summary of all the campaigns for a CI job page, and
+	findings.txt, the number of findings. A campaign that fails is reported in the summary; the
+	others still run"
+
+	| classes directory results |
+	classes := (someClassesOrNames isString
+		            ifTrue: [ someClassesOrNames substrings: ', ' ]
+		            ifFalse: [
+			            someClassesOrNames isBehavior
+				            ifTrue: [ { someClassesOrNames } ]
+				            ifFalse: [ someClassesOrNames ] ]) collect: [ :each |
+		           each isString
+			           ifTrue: [ self environment at: each asSymbol ]
+			           ifFalse: [ each ] ].
+	directory := aDirectoryName asFileReference.
+	directory ensureCreateDirectory.
+	results := classes flatCollect: [ :campaignClass |
+		           (self campaignsIn: campaignClass) collect: [ :method |
+		           | perfumate |
+		           [
+		           perfumate := campaignClass perform: method selector.
+		           perfumate isNamed ifFalse: [ perfumate name: method selector asString ].
+		           perfumate budget: (self budgetFromEnvironmentOr: perfumate budget).
+		           method selector -> (perfumate run
+				            saveTo: directory;
+				            yourself) ]
+			           on: Error
+			           do: [ :error | error return: method selector -> error ] ] ].
+	(directory / 'summary.md') ensureDelete; writeStreamDo: [ :stream |
+		self writeSummaryOf: results on: stream ].
+	(directory / 'findings.txt') ensureDelete; writeStreamDo: [ :stream |
+		stream print: (results inject: 0 into: [ :sum :each |
+				  sum + ((each value isKindOf: PerfUMateReport)
+					   ifTrue: [ each value findings size ]
+					   ifFalse: [ 0 ]) ]) ].
+	^ results
+]
+
+{ #category : 'ci' }
+PerfUMate class >> writeSummaryOf: someResults on: aStream [
+	"Markdown for a CI job page: one table of campaigns, then the findings of each"
+
+	aStream
+		nextPutAll: '## PerfUMate'; lf; lf;
+		nextPutAll: '| Campaign | Slow inputs | Errors | Runs | Time |'; lf;
+		nextPutAll: '| --- | ---: | ---: | ---: | --- |'; lf.
+	someResults do: [ :each |
+		(each value isKindOf: PerfUMateReport)
+			ifTrue: [
+				aStream
+					nextPutAll: '| '; nextPutAll: each value name;
+					nextPutAll: ' | '; print: each value slowInputs size;
+					nextPutAll: ' | '; print: each value errors size;
+					nextPutAll: ' | '; print: each value trace runs size;
+					nextPutAll: ' | '; nextPutAll: each value elapsedString;
+					nextPutAll: ' |'; lf ]
+			ifFalse: [
+				aStream
+					nextPutAll: '| '; nextPutAll: each key;
+					nextPutAll: ' | failed: '; nextPutAll: (each value messageText asString copyReplaceAll: '|' with: '/');
+					nextPutAll: ' | | | |'; lf ] ].
+	someResults do: [ :each |
+		((each value isKindOf: PerfUMateReport) and: [ each value findings notEmpty ]) ifTrue: [
+			aStream lf; nextPutAll: '### '; nextPutAll: each value name; lf; lf.
+			aStream nextPutAll: '| Finding | Minimized input |'; lf; nextPutAll: '| --- | --- |'; lf.
+			each value findings do: [ :finding |
+				| input |
+				input := finding minimizedSton.
+				input size > 160 ifTrue: [ input := (input first: 160) , '...' ].
+				aStream
+					nextPutAll: '| '; nextPutAll: (finding summary copyReplaceAll: '|' with: '/');
+					nextPutAll: ' | `'; nextPutAll: (input copyReplaceAll: '`' with: '''');
+					nextPutAll: '` |'; lf ] ] ].
+	aStream lf; nextPutAll: 'Charts, generated tests and the full reports (`<campaign>.html`) are in the job''s artifact.'; lf
+]
+
 { #category : 'grammars' }
 PerfUMate class >> grammarFromSource: aString [
 
@@ -237,6 +327,12 @@ PerfUMate >> name [
 		  examples isEmptyOrNil
 			  ifTrue: [ 'perfumate' ]
 			  ifFalse: [ self rootType name ] ]
+]
+
+{ #category : 'accessing' }
+PerfUMate >> isNamed [
+
+	^ name notNil
 ]
 
 { #category : 'api' }

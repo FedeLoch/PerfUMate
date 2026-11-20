@@ -14,12 +14,31 @@ Class {
 		'brokenRule',
 		'signature',
 		'microseconds',
-		'baselineMicroseconds'
+		'baselineMicroseconds',
+		'originalText',
+		'minimizedText'
 	],
 	#category : 'PerfUMate-Report',
 	#package : 'PerfUMate',
 	#tag : 'Report'
 }
+
+{ #category : 'saving' }
+PerfUMateFinding class >> parse: aStonStringOrNil [
+	"nil when the text is missing or STON cannot read it"
+
+	aStonStringOrNil ifNil: [ ^ nil ].
+	^ [ STON fromString: aStonStringOrNil ]
+		  on: Error
+		  do: [ :error | error return: nil ]
+]
+
+{ #category : 'ston' }
+PerfUMateFinding class >> stonAllInstVarNames [
+	"The inputs are saved as text (see #prepareForSaving)"
+
+	^ super stonAllInstVarNames copyWithoutAll: #( #original #minimized )
+]
 
 { #category : 'accessing' }
 PerfUMateFinding >> baselineMicroseconds [
@@ -80,20 +99,36 @@ PerfUMateFinding >> microseconds: aNumber baseline: aBaseline [
 
 { #category : 'accessing' }
 PerfUMateFinding >> minimized [
+	"A finding loaded from a saved report parses its input on demand"
 
+	minimized ifNil: [ minimized := self class parse: minimizedText ].
 	^ minimized
 ]
 
 { #category : 'accessing' }
 PerfUMateFinding >> minimizedSton [
 
-	^ STON toString: minimized
+	^ minimizedText ifNil: [ STON toString: minimized ]
 ]
 
 { #category : 'accessing' }
 PerfUMateFinding >> original [
 
+	original ifNil: [ original := self class parse: originalText ].
 	^ original
+]
+
+{ #category : 'saving' }
+PerfUMateFinding >> prepareForSaving [
+	"Saved reports keep the inputs as STON text: an input that STON cannot read back (a finding
+	about STON, say) then costs that input, not the whole report"
+
+	originalText := [ STON toString: original ]
+		                on: Error
+		                do: [ :error | error return: nil ].
+	minimizedText := [ STON toString: minimized ]
+		                 on: Error
+		                 do: [ :error | error return: nil ]
 ]
 
 { #category : 'printing' }
