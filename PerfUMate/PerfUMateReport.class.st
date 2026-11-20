@@ -2,10 +2,13 @@
 What a PerfUMate run answers.
 
 	report findings.      report slowInputs.      report errors.
+	report trace.         ""every run of the search: time, outcome, size, mutator""
 	report grammar.       ""the grammar the campaign used""
-	report campaign.      ""the UmeResult: plots, CSV export""
+	report charts.        ""the Roassal charts of the inspector tabs""
 	report testSource.    ""an SUnit class reproducing every finding""
 	report generateTestsIn: #CheckoutFuzzTest package: 'MyShop-Tests'.
+	report saveTo: 'perfumate-out'.
+	PerfUMateReport fromFolder: 'perfumate-out' name: 'checkout'.
 	report open.
 
 The generated tests fail while the problems are there and pass once they are fixed, so they can
@@ -22,12 +25,25 @@ Class {
 		'baselineMicroseconds',
 		'referenceExample',
 		'elapsed',
-		'trace'
+		'trace',
+		'name',
+		'slowdown',
+		'savedTests'
 	],
 	#category : 'PerfUMate-Report',
 	#package : 'PerfUMate',
 	#tag : 'Report'
 }
+
+{ #category : 'saving' }
+PerfUMateReport class >> fromFolder: aDirectoryName name: aName [
+	"A report saved with #saveTo:, back: findings, trace, grammar and tests, to inspect and chart
+	again (for example the artifact of a CI run)"
+
+	| saved |
+	saved := STON fromString: (aDirectoryName asFileReference / (aName , '.ston')) contents.
+	^ self new setSaved: saved
+]
 
 { #category : 'accessing' }
 PerfUMateReport >> baselineMicroseconds [
@@ -201,17 +217,69 @@ PerfUMateReport >> setConfiguration: aPerfUMate grammar: aGrammar campaign: aUme
 
 { #category : 'saving' }
 PerfUMateReport >> saveTo: aDirectoryName [
-	"Write summary.md and tests.st (the generated test methods) into aDirectoryName. Each
-	report gets its own file names, so several campaigns can share the directory"
+	"Write into aDirectoryName, under the campaign's name:
+	- <name>.md: the summary, with the minimized inputs;
+	- <name>-tests.st: the generated test methods;
+	- <name>-trace.csv: one row per run of the search;
+	- <name>.ston: the whole report, to load back with #fromFolder:name:.
+	Several campaigns can share the directory"
 
-	| directory name |
+	| directory |
 	directory := aDirectoryName asFileReference.
 	directory ensureCreateDirectory.
-	name := configuration name.
-	(directory / (name , '.md')) writeStreamDo: [ :stream | stream nextPutAll: self summary ].
-	(directory / (name , '-tests.st')) writeStreamDo: [ :stream |
+	(directory / (self name , '.md')) ensureDelete; writeStreamDo: [ :stream | stream nextPutAll: self summary ].
+	(directory / (self name , '-tests.st')) ensureDelete; writeStreamDo: [ :stream |
 		stream nextPutAll: (self testSource copyReplaceAll: String cr with: String lf) ].
+	(directory / (self name , '-trace.csv')) ensureDelete; writeStreamDo: [ :stream | self trace writeCsvOn: stream ].
+	(directory / (self name , '.ston')) ensureDelete; writeStreamDo: [ :stream |
+		STON put: self savedDictionary onStreamPretty: stream ].
 	^ directory
+]
+
+{ #category : 'saving' }
+PerfUMateReport >> savedDictionary [
+
+	^ OrderedDictionary new
+		  at: #name put: self name;
+		  at: #elapsedMilliseconds put: elapsed asMilliSeconds;
+		  at: #baselineMicroseconds put: baselineMicroseconds;
+		  at: #slowdown put: self slowdown;
+		  at: #grammar put: grammar mateDefinition;
+		  at: #referenceExample put: referenceExample;
+		  at: #findings put: findings;
+		  at: #trace put: self trace;
+		  at: #tests put: self testSource;
+		  yourself
+]
+
+{ #category : 'initialization' }
+PerfUMateReport >> setSaved: aDictionary [
+
+	name := aDictionary at: #name.
+	elapsed := Duration milliSeconds: (aDictionary at: #elapsedMilliseconds).
+	baselineMicroseconds := aDictionary at: #baselineMicroseconds.
+	slowdown := aDictionary at: #slowdown.
+	grammar := PerfUMate grammarFromSource: (aDictionary at: #grammar).
+	referenceExample := aDictionary at: #referenceExample.
+	findings := (aDictionary at: #findings) asArray.
+	trace := aDictionary at: #trace.
+	savedTests := aDictionary at: #tests
+]
+
+{ #category : 'accessing' }
+PerfUMateReport >> name [
+
+	^ configuration
+		  ifNil: [ name ]
+		  ifNotNil: [ configuration name ]
+]
+
+{ #category : 'accessing' }
+PerfUMateReport >> slowdown [
+
+	^ configuration
+		  ifNil: [ slowdown ]
+		  ifNotNil: [ configuration slowdown ]
 ]
 
 { #category : 'accessing' }
@@ -240,7 +308,7 @@ PerfUMateReport >> summary [
 	^ String streamContents: [ :stream |
 		  stream
 			  nextPutAll: '# PerfUMate: ';
-			  nextPutAll: configuration name;
+			  nextPutAll: self name;
 			  lf;
 			  lf;
 			  print: self;
@@ -289,13 +357,15 @@ PerfUMateReport >> testMethodSources [
 				 testMethodSourceNamed: 'testPerfUMate' , (index printPaddedWith: $0 to: 2) , (finding isError
 						  ifTrue: [ 'Error' ]
 						  ifFalse: [ 'SlowInput' ])
-				 slowdown: configuration slowdown) ].
+				 slowdown: self slowdown) ].
 	^ sources
 ]
 
 { #category : 'test generation' }
 PerfUMateReport >> testSource [
+	"A report loaded from a folder keeps the tests it was saved with"
 
+	savedTests ifNotNil: [ ^ savedTests ].
 	^ String streamContents: [ :stream |
 		  self testMethodSources
 			  do: [ :source | stream nextPutAll: source ]

@@ -50,10 +50,3 @@ PerfUMateMutator >> space: aSearchSpace [
 
 	space := aSearchSpace
 ]
-
-{ #category : 'printing' }
-PerfUMateMutator >> label [
-	"A short name for charts"
-
-	^ self class name
-]

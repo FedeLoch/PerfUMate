@@ -93,7 +93,9 @@ PerfUMateTest >> testReportIsSaved [
 	report saveTo: directory.
 	self assert: ((directory / 'checkout.md') contents includesSubstring: '# PerfUMate: checkout').
 	self assert: (directory / 'checkout-tests.st') exists.
-	self assertInspectorTabsOf: report
+	self assert: ((directory / 'checkout-trace.csv') contents lines size) equals: report trace runs size + 1.
+	self assertInspectorTabsOf: report.
+	self assertLoadedFrom: directory matches: report
 ]
 
 { #category : 'tests' }
@@ -109,6 +111,19 @@ PerfUMateTest >> assertInspectorTabsOf: aReport [
 	self assert: ((aReport inspectionTests: builder) text asString includesSubstring: 'perfumateBenchmark').
 	self assert: ((aReport inspectionGrammar: builder) text asString includesSubstring: 'PerfUMateExampleOrder').
 	self assertChartsOf: aReport
+]
+
+{ #category : 'tests' }
+PerfUMateTest >> assertLoadedFrom: aDirectory matches: aReport [
+	"A saved report comes back with its findings, trace, grammar and tests, and charts again"
+
+	| loaded |
+	loaded := PerfUMateReport fromFolder: aDirectory name: 'checkout'.
+	self assert: loaded findings size equals: aReport findings size.
+	self assert: loaded trace runs size equals: aReport trace runs size.
+	self assert: loaded testSource equals: aReport testSource.
+	self assert: loaded grammar mateDefinition equals: aReport grammar mateDefinition.
+	self assertChartsOf: loaded
 ]
 
 { #category : 'tests' }

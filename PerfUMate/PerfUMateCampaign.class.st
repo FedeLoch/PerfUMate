@@ -112,21 +112,14 @@ PerfUMateCampaign >> graphOf: aUmeTest [
 { #category : 'campaign' }
 PerfUMateCampaign >> guide: aRunner [
 
-	| guide evaluator |
 	aRunner guidedByExecutionTime.
 	configuration intent = #slowInputs ifTrue: [
 		configuration measure = #methodCalls ifTrue: [ aRunner guidedByMethodsCalls ].
 		configuration measure = #bytecodes ifTrue: [ aRunner guidedByBytecodes ].
 		^ self ].
-	guide := configuration intent = #errors
-		         ifTrue: [ PerfUMateCoverageAndErrorsGuide new ]
-		         ifFalse: [ configuration intent ].
-	evaluator := aRunner feedbackEvaluator.
-	guide evaluator: evaluator.
-	"Ume has no guide setter yet (see docs/DESIGN.md, proposed changes)"
-	(evaluator respondsTo: #guide:)
-		ifTrue: [ evaluator guide: guide ]
-		ifFalse: [ evaluator instVarNamed: #guide put: guide ]
+	aRunner guidedBy: (configuration intent = #errors
+			 ifTrue: [ PerfUMateCoverageAndErrorsGuide new ]
+			 ifFalse: [ configuration intent ])
 ]
 
 { #category : 'testing' }
@@ -209,6 +202,7 @@ PerfUMateCampaign >> run [
 	self measureBaseline.
 	umeResult := [ self runUmeFor: deadline - (configuration budget * 0.2) - DateAndTime now ]
 		             ensure: [ benchmark trace: nil ].
+	trace freeze.
 	findings := self findingsFrom: umeResult.
 	^ PerfUMateReport new
 		  setConfiguration: configuration
@@ -242,7 +236,7 @@ PerfUMateCampaign >> runUmeFor: aDuration [
 		          property: [ :receiver :arguments :result | true ];
 		          method: PerfUMateBenchmark >> #runOn:;
 		          yourself.
-	runner := PerfUMateRunner test: schema for: (aDuration max: 1 second).
+	runner := UmeRunner test: schema for: (aDuration max: 1 second).
 	self guide: runner.
 	runner methodsToInstrument: self methodsToInstrument.
 	^ runner run

@@ -7,12 +7,20 @@ Class {
 	#superclass : 'Object',
 	#instVars : [
 		'runs',
-		'corpus'
+		'corpus',
+		'probabilities'
 	],
 	#category : 'PerfUMate-Report',
 	#package : 'PerfUMate',
 	#tag : 'Report'
 }
+
+{ #category : 'ston' }
+PerfUMateTrace class >> stonAllInstVarNames [
+	"The corpus is the campaign's, not part of the record"
+
+	^ #( #runs #probabilities )
+]
 
 { #category : 'accessing' }
 PerfUMateTrace >> corpus: aUmeCorpusGenerator [
@@ -26,9 +34,7 @@ PerfUMateTrace >> currentMutatorLabel [
 	| mutator |
 	mutator := corpus ifNotNil: [ corpus lastSelectedMutator ].
 	mutator ifNil: [ ^ 'example' ].
-	^ (mutator respondsTo: #label)
-		  ifTrue: [ mutator label ]
-		  ifFalse: [ mutator class name ]
+	^ mutator label
 ]
 
 { #category : 'initialization' }
@@ -36,6 +42,14 @@ PerfUMateTrace >> initialize [
 
 	super initialize.
 	runs := OrderedCollection new
+]
+
+{ #category : 'recording' }
+PerfUMateTrace >> freeze [
+	"End of the search: keep MOpt's final probabilities and let the corpus go"
+
+	probabilities := self mutatorProbabilities.
+	corpus := nil
 ]
 
 { #category : 'recording' }
@@ -49,17 +63,15 @@ PerfUMateTrace >> mutatorProbabilities [
 	"label -> selection probability, when the selector exposes them (MOpt does)"
 
 	| selector weights mutators |
+	probabilities ifNotNil: [ ^ probabilities ].
 	corpus ifNil: [ ^ Dictionary new ].
-	selector := corpus instVarNamed: #mutatorSelector.
+	selector := corpus mutatorSelector.
 	weights := [ selector mutatorWeights ]
 		           on: Error
 		           do: [ :error | error return: nil ].
 	mutators := corpus mutators.
 	(weights isNil or: [ weights size ~= mutators size ]) ifTrue: [ ^ Dictionary new ].
-	^ (mutators with: weights collect: [ :mutator :weight |
-		   ((mutator respondsTo: #label)
-			    ifTrue: [ mutator label ]
-			    ifFalse: [ mutator class name ]) -> weight ]) asDictionary
+	^ (mutators with: weights collect: [ :mutator :weight | mutator label -> weight ]) asDictionary
 ]
 
 { #category : 'statistics' }
@@ -106,4 +118,21 @@ PerfUMateTrace >> records [
 PerfUMateTrace >> runs [
 
 	^ runs
+]
+
+{ #category : 'exporting' }
+PerfUMateTrace >> writeCsvOn: aStream [
+	"One row per run: run, microseconds, outcome, error, objects, mutator, record"
+
+	aStream nextPutAll: 'run,microseconds,outcome,error,objects,mutator,record'; lf.
+	runs do: [ :run |
+		aStream
+			print: run index; nextPut: $,;
+			print: run microseconds; nextPut: $,;
+			nextPutAll: run outcome; nextPut: $,;
+			nextPutAll: (run errorClassName ifNil: [ '' ]); nextPut: $,;
+			print: run objects; nextPut: $,;
+			nextPutAll: run mutator; nextPut: $,;
+			print: run isRecord;
+			lf ]
 ]

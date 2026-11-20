@@ -1,9 +1,11 @@
 # PerfUMate
 
-[![CI](https://github.com/FedeLoch/PerfUMate/actions/workflows/ci.yml/badge.svg)](https://github.com/FedeLoch/PerfUMate/actions/workflows/ci.yml)
-[![Last commit](https://img.shields.io/github/last-commit/FedeLoch/PerfUMate)](https://github.com/FedeLoch/PerfUMate/commits/main)
-[![License](https://img.shields.io/github/license/FedeLoch/PerfUMate)](LICENSE)
-[![Pharo 13](https://img.shields.io/badge/Pharo-13-blue)](https://pharo.org)
+<p align="center">
+  <a href="https://github.com/FedeLoch/PerfUMate/actions/workflows/ci.yml"><img src="https://github.com/FedeLoch/PerfUMate/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
+  <a href="https://github.com/FedeLoch/PerfUMate/commits/main"><img src="https://img.shields.io/github/last-commit/FedeLoch/PerfUMate" alt="Last commit"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/FedeLoch/PerfUMate" alt="License"/></a>
+  <a href="https://pharo.org"><img src="https://img.shields.io/badge/Pharo-13-blue" alt="Pharo 13"/></a>
+</p>
 
 Performance fuzzing for Pharo, from a few example objects.
 
@@ -96,50 +98,16 @@ The report:
 
 ```
 PerfUMate: 2 slow input(s), 2 error(s) in 0:00:01:00
-14.7x slower than the median input (133 us vs 9 us) - breaks: Array size 22 not between 0 and 16
-14.7x slower than the median input (133 us vs 9 us) - breaks: Array size 24 not between 0 and 16
+16.0x slower than the median input (116 us vs 7 us) - breaks: Array size 76 not between 0 and 16
+17.0x slower than the median input (123 us vs 7 us) - breaks: Array size 80 not between 0 and 16
 SubscriptOutOfBounds in PerfUMateExampleCheckout>>#discountFor:: 1 in ''
 ZeroDivide in PerfUMateExampleCheckout>>#process:
 ```
 
-The slow inputs are orders with 22 and 24 items (from 1024 before minimization): `loyaltyPointsFor:` is quadratic in the number
-of items. The broken rule says why the examples did not show it, as they never had more than 3
-items. The two crashes were found on the way: coupons shorter than 3 characters, and orders
-without units.
-
-`report open` shows the findings in an inspector, with charts to understand the campaign:
-
-<p align="center">
-  <img src="images/report-findings.png" alt="Findings tab: errors and slow inputs with their minimized inputs" width="820"/>
-</p>
-
-**Campaign.** Every run of the search, and its time against the size of the input. The curve on
-the right is the complexity of the slow path: here, quadratic.
-
-<p align="center">
-  <img src="images/report-campaign.png" alt="Campaign tab: time of every run and time against input size" width="820"/>
-</p>
-
-<table>
-  <tr>
-    <td width="33%"><a href="images/report-bugs.png"><img src="images/report-bugs.png" alt="Bugs tab"/></a></td>
-    <td width="33%"><a href="images/report-mutators.png"><img src="images/report-mutators.png" alt="Mutators tab"/></a></td>
-    <td width="33%"><a href="images/report-grammar.png"><img src="images/report-grammar.png" alt="Grammar hits tab"/></a></td>
-  </tr>
-  <tr>
-    <td><b>Bugs</b>: errors hit during the search, and each finding before and after minimization.</td>
-    <td><b>Mutators</b>: runs and records per mutator, and what MOpt ended up preferring.</td>
-    <td><b>Grammar hits</b>: the most generated grammar points, and the rules the best inputs break.</td>
-  </tr>
-  <tr>
-    <td colspan="2"><a href="images/report-tests.png"><img src="images/report-tests.png" alt="Tests tab"/></a></td>
-    <td><a href="images/report-grammar-definition.png"><img src="images/report-grammar-definition.png" alt="Grammar tab"/></a></td>
-  </tr>
-  <tr>
-    <td colspan="2"><b>Tests</b>: the generated SUnit methods, one per finding, ready to compile with <code>generateTestsIn:package:</code>.</td>
-    <td><b>Grammar</b>: the grammar the campaign used, inferred from the examples and widened.</td>
-  </tr>
-</table>
+The slow inputs are orders with 76 and 80 items, reduced from 758 and 494: `loyaltyPointsFor:` is
+quadratic in the number of items. The broken rule says why the examples did not show it, as they
+never had more than 3 items. The two crashes were found on the way: coupons shorter than 3
+characters, and orders without units. [The report](#the-report) shows what else a report holds.
 
 ## Example: crashes and other bugs
 
@@ -197,10 +165,90 @@ PerfUMate: 3 slow input(s), 1 error(s) in 0:00:01:00
 `instrument:` takes methods, classes or package names. Only what you give is instrumented, which
 keeps each run cheap. Findings are still confirmed by execution time.
 
-## Generated tests
+## The report
 
-`report generateTestsIn: #CheckoutFuzzTest package: 'MyShop-Tests'` turns the findings into
-tests (inputs shortened here):
+`run` answers a `PerfUMateReport`. `report open` shows it in an inspector, one tab per view:
+
+<p align="center">
+  <img src="images/report-findings.png" alt="Findings tab: errors and slow inputs with their minimized inputs" width="820"/>
+</p>
+
+<p align="center">
+  <img src="images/report-campaign.png" alt="Campaign tab: time of every run, and time against input size" width="820"/>
+</p>
+
+**Campaign**: every run of the search, and its time against the size of its input. The curve on
+the right is the complexity of the slow path, here quadratic.
+
+<table>
+  <tr>
+    <td width="33%"><a href="images/report-bugs.png"><img src="images/report-bugs.png" alt="Bugs tab"/></a></td>
+    <td width="33%"><a href="images/report-mutators.png"><img src="images/report-mutators.png" alt="Mutators tab"/></a></td>
+    <td width="33%"><a href="images/report-grammar.png"><img src="images/report-grammar.png" alt="Grammar hits tab"/></a></td>
+  </tr>
+  <tr>
+    <td><b>Bugs</b>: errors hit during the search, and each finding before and after minimization.</td>
+    <td><b>Mutators</b>: runs and records per mutator, and what MOpt ended up preferring.</td>
+    <td><b>Grammar hits</b>: the most generated grammar points, and the rules the best inputs break.</td>
+  </tr>
+  <tr>
+    <td colspan="2"><a href="images/report-tests.png"><img src="images/report-tests.png" alt="Tests tab"/></a></td>
+    <td><a href="images/report-grammar-definition.png"><img src="images/report-grammar-definition.png" alt="Grammar tab"/></a></td>
+  </tr>
+  <tr>
+    <td colspan="2"><b>Tests</b>: the generated SUnit methods, one per finding.</td>
+    <td><b>Grammar</b>: the grammar the campaign used, inferred from the examples and widened.</td>
+  </tr>
+</table>
+
+Everything in the tabs is also available from code.
+
+**Findings**
+
+```smalltalk
+report findings.                  "every finding; report slowInputs and report errors split them"
+finding := report findings first.
+finding summary.                  "one line, as in the report"
+finding minimized.                "the reduced input, a real object"
+finding original.                 "the input the search found"
+finding minimizedSton.            "the reduced input as STON"
+finding slowdown.                 "times slower than the median input (slow inputs)"
+finding signature.                "error class and method of your code (errors)"
+finding brokenRule.               "the grammar rule the input breaks, or nil"
+finding isMinimized.              "false when minimization ran out of time"
+```
+
+**The trace**: every run of the search, kept to analyze the campaign afterwards.
+
+```smalltalk
+report trace runs.                "one PerfUMateRun per execution"
+run := report trace runs last.
+run microseconds.  run outcome.   "#ok, #error or #timeout"
+run objects.       run mutator.   "input size, and the mutator that produced it"
+run isRecord.      run input.     "records keep their input"
+report trace records.             "the runs that set a record"
+report trace mutatorStatistics.   "runs and records per mutator"
+report trace mutatorProbabilities. "MOpt's final probabilities"
+```
+
+**Charts, grammar and campaign**
+
+```smalltalk
+report charts campaignCanvas open.   "also bugsCanvas, mutatorsCanvas, grammarCanvas (Roassal)"
+report grammar mateDefinition.       "the grammar the campaign used"
+report campaign.                     "Ume's own result (UmeResult)"
+```
+
+**Tests**
+
+```smalltalk
+report testSource.
+report generateTestsIn: #CheckoutFuzzTest package: 'MyShop-Tests'.
+```
+
+The generated tests fail while the problems are there and pass once they are fixed. A slow input
+test times the input against one of the examples in the same run, so it does not depend on the
+machine (inputs shortened here):
 
 ```smalltalk
 testPerfUMate01Error
@@ -208,15 +256,35 @@ testPerfUMate01Error
     self assertNoErrorOn: (STON fromString: 'PerfUMateExampleOrder{#items:OrderedCollection[],#coupon:''''}')
 
 testPerfUMate03SlowInput
-    "PerfUMate: 14.7x slower than the median input (133 us vs 9 us)"
+    "PerfUMate: 16.0x slower than the median input (116 us vs 7 us)"
     self
-        assertInput: (STON fromString: 'PerfUMateExampleOrder{#items:OrderedCollection[...22 items...]}')
+        assertInput: (STON fromString: 'PerfUMateExampleOrder{#items:OrderedCollection[...76 items...]}')
         isAtMost: 10
         timesSlowerThan: self perfumateReferenceInput
 ```
 
-They fail while the problems are there and pass once they are fixed. The slow input test times
-the input against one of the examples in the same run, so it does not depend on the machine.
+**Saving and loading**
+
+```smalltalk
+report saveTo: 'perfumate-out'.
+```
+
+writes four files named after the campaign (`name:`, by default the examples' class):
+
+| File | Content |
+| --- | --- |
+| `<name>.md` | the summary, with the minimized inputs |
+| `<name>-tests.st` | the generated test methods |
+| `<name>-trace.csv` | one row per run: run, microseconds, outcome, error, objects, mutator, record |
+| `<name>.ston` | the whole report |
+
+A saved report loads back with its findings, trace, grammar and tests, and opens with its charts,
+for example a report saved by a nightly CI job:
+
+```smalltalk
+report := PerfUMateReport fromFolder: 'perfumate-out' name: 'checkout'.
+report open.
+```
 
 ## Options
 

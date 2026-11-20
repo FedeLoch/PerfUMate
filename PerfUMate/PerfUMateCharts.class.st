@@ -222,12 +222,8 @@ PerfUMateCharts >> grammarPoints [
 	points := Dictionary new.
 	report grammar typeDeclarations do: [ :declaration |
 		| visits rewards |
-		visits := [ declaration instVarNamed: #visits ]
-			          on: Error
-			          do: [ :error | error return: nil ].
-		rewards := [ declaration instVarNamed: #rewards ]
-			           on: Error
-			           do: [ :error | error return: nil ].
+		visits := declaration visits.
+		rewards := declaration rewards.
 		visits ifNotNil: [
 			visits keysAndValuesDo: [ :key :count |
 				| label point |
